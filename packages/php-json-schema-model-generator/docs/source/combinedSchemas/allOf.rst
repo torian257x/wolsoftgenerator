@@ -1,0 +1,100 @@
+All Of
+======
+
+The `allOf` keyword can be used to combine multiple subschemas. The provided value must be valid against each of the subschemas.
+
+.. code-block:: json
+
+    {
+        "$id": "example",
+        "type": "object",
+        "properties": {
+            "example": {
+                "allOf": [
+                    {
+                        "type": "number",
+                        "multipleOf": 5
+                    },
+                    {
+                        "type": "number",
+                        "multipleOf": 3
+                    }
+                ]
+            }
+        }
+    }
+
+Valid values are eg. 15, 30, 45. Invalid values are eg. 1, 2, 3, 4, 5 or any non numeric values.
+
+Generated interface:
+
+.. code-block:: php
+
+    public function setExample(float $example): static;
+    public function getExample(): float;
+
+
+Possible exception (eg. if a string is provided):
+
+.. code-block:: none
+
+    Invalid value for example declined by composition constraint.
+      Requires to match all composition elements but matched 0 elements.
+      - Composition element #1: Failed
+        * Invalid type for example. Requires float, got string
+      - Composition element #2: Failed
+        * Invalid type for example. Requires float, got string
+
+Possible exception (if eg. 5 is provided, which matches only one subschema):
+
+.. code-block:: none
+
+    Invalid value for example declined by composition constraint.
+      Requires to match all composition elements but matched 1 elements.
+      - Composition element #1: Valid
+      - Composition element #2: Failed
+        * Value for example must be a multiple of 3
+
+The thrown exception will be a *PHPModelGenerator\\Exception\\ComposedValue\\AllOfException* which provides the following methods to get further error details:
+
+.. code-block:: php
+
+    // returns a two-dimensional array which contains all validation exceptions grouped by composition elements
+    public function getCompositionErrorCollection(): array
+    // get the amount of succeeded composition elements
+    public function getSucceededCompositionElements(): int
+    // get the name of the property which failed
+    public function getPropertyName(): string
+    // get the value provided to the property
+    public function getProvidedValue()
+
+.. hint::
+
+    When combining multiple nested objects with an `allOf` composition a `merged property <mergedProperty.html>`__ will be generated
+
+.. note::
+
+    ``allOf`` branches can be the boolean literals ``true`` or ``false``.
+
+    - ``true`` branch — treated as an empty schema; any value satisfies it and it adds no constraint.
+    - ``false`` branch — makes the whole composition unsatisfiable; any provided value raises an
+      ``AllOfException`` at runtime (the false branch is represented as an always-failing composition
+      element). The generator also emits a warning at generation time. Absent optional properties
+      are still allowed.
+
+.. note::
+
+    When a property is defined in multiple ``allOf`` branches with conflicting types (e.g. one branch
+    requires ``string`` and another requires ``integer``), the generator will throw a ``SchemaException``
+    at generation time. ``allOf`` requires all constraints to hold simultaneously, so conflicting types
+    make the schema unsatisfiable. When branches agree on a type, the generator narrows the property to
+    the intersection of all declared types across branches. See
+    `Cross-typed compositions <crossTypedComposition.html>`__ for the full explanation and a contrast
+    with ``anyOf``/``oneOf`` union widening.
+
+.. note::
+
+    For object-level ``allOf`` compositions, when a property appears in the ``required`` array of
+    **any** branch, the generator promotes that property to non-nullable in the generated class. All
+    ``allOf`` branches must hold simultaneously, so any branch's ``required`` constraint is effectively
+    global. See `Cross-typed compositions <crossTypedComposition.html>`__ for the full promotion rules.

@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "properties": {
+    "array_items": {
+      "type": "array",
+      "description": "Array referencing enum via $defs",
+      "items": {
+        "$ref": "#/$defs/MyEnum"
+      }
+    },
+    "nested": {
+      "type": "object",
+      "description": "Nested object with enum reference",
+      "properties": {
+        "single_enum": {
+          "description": "Single enum value referencing same $defs",
+          "$ref": "#/$defs/MyEnum"
+        }
+      },
+      "required": [
+        "single_enum"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "array_items",
+    "nested"
+  ],
+  "$defs": {
+    "MyEnum": {
+      "title": "MyEnum",
+      "description": "Test enum",
+      "type": "string",
+      "enum": [
+        "value1",
+        "value2"
+      ]
+    }
+  }
+}

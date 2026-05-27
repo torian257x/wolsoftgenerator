@@ -1,0 +1,35 @@
+{
+    "name": "wolsoft/test-bug",
+    "type": "project",
+    "require": {
+        "php": "^8.3",
+        "ext-mbstring": "*",
+        "wol-soft/php-json-schema-model-generator": "dev-v3ready-ai-fixed",
+        "wol-soft/php-json-schema-model-generator-production": "dev-v3ready",
+        "wol-soft/php-micro-template": "^1.10.2"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^13.0"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "packages/php-json-schema-model-generator",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "packages/php-json-schema-model-generator-production",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "autoload-dev": {
+        "psr-4": {
+            "PHPModelGenerator\\Tests\\": ["tests", "packages/php-json-schema-model-generator/tests"]
+        }
+    }
+}

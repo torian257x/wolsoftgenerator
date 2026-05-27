@@ -1,0 +1,637 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PHPModelGenerator\Tests\ComposedValue;
+
+use PHPModelGenerator\Exception\ComposedValue\AnyOfException;
+use PHPModelGenerator\Exception\ErrorRegistryException;
+use PHPModelGenerator\Exception\ValidationException;
+use PHPModelGenerator\Model\GeneratorConfiguration;
+use PHPModelGenerator\Tests\AbstractPHPModelGeneratorTestCase;
+use stdClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+/**
+ * Class ComposedAnyOfTest
+ *
+ * @package PHPModelGenerator\Tests\ComposedValue
+ */
+class ComposedAnyOfTest extends AbstractPHPModelGeneratorTestCase
+{
+    public function testNullProvidedForEmptyOptionalAnyOfIsValid(): void
+    {
+        $className = $this->generateClassFromFile('EmptyAnyOf.json');
+
+        $object = new $className(['property' => null]);
+        $this->assertNull($object->getProperty());
+        $this->assertSame(['property' => null], $object->getRawModelDataInput());
+    }
+
+    /**
+     * @param $propertyValue
+     */
+    #[DataProvider('validEmptyAnyOfDataProvider')]
+    public function testValueProvidedForEmptyOptionalAnyOfIsInvalid(string|int|array $propertyValue): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage(<<<ERROR
+Invalid value for property declined by composition constraint.
+  Requires to match at least one composition element.
+ERROR,
+        );
+
+        $className = $this->generateClassFromFile('EmptyAnyOf.json');
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function validEmptyAnyOfDataProvider(): array
+    {
+        return [
+            'empty array' => [[]],
+            'string' => ['Hello'],
+            'int' => [9],
+            'array' => [['name' => 'Hannes', 'age' => 42]],
+        ];
+    }
+
+    #[DataProvider('implicitNullDataProvider')]
+    public function testCompositionTypes(bool $implicitNull): void
+    {
+        $className = $this->generateClassFromFile(
+            'ObjectLevelCompositionTypeCheck.json',
+            (new GeneratorConfiguration())->setImmutable(false),
+            false,
+            $implicitNull,
+        );
+
+        // Both properties are exclusive to one branch and the other branch allows additional
+        // properties → types are widened to mixed so raw input values can be stored without TypeError.
+        $this->assertSame('mixed', $this->getPropertyTypeAnnotation($className, 'age'));
+        $this->assertSame('mixed', $this->getPropertyTypeAnnotation($className, 'name'));
+
+        $this->assertSame('mixed', $this->getParameterTypeAnnotation($className, 'setAge'));
+        $this->assertSame('mixed', $this->getParameterType($className, 'setAge')->getName());
+
+        $this->assertSame('mixed', $this->getParameterTypeAnnotation($className, 'setName'));
+        $this->assertSame('mixed', $this->getParameterType($className, 'setName')->getName());
+
+        $this->assertSame('mixed', $this->getReturnTypeAnnotation($className, 'getAge'));
+        $this->assertSame('mixed', $this->getReturnType($className, 'getAge')->getName());
+
+        $this->assertSame('mixed', $this->getReturnTypeAnnotation($className, 'getName'));
+        $this->assertSame('mixed', $this->getReturnType($className, 'getName')->getName());
+    }
+
+    public function testAdditionalPropertiesFalsePreservesTypedHints(): void
+    {
+        $className = $this->generateClassFromFile(
+            'ObjectLevelCompositionAdditionalPropertiesFalse.json',
+            (new GeneratorConfiguration())->setImmutable(false),
+        );
+
+        // With additionalProperties:false on every other branch, the two properties are mutually
+        // exclusive in any valid input: if branch 1 matches, integerProperty cannot exist (it would
+        // be rejected as additional); if branch 2 matches, stringProperty cannot exist.
+        // Therefore the generator keeps the typed hints — no widening to mixed is needed.
+        $this->assertSame('string|null', $this->getPropertyTypeAnnotation($className, 'stringProperty'));
+        $this->assertSame('int|null', $this->getPropertyTypeAnnotation($className, 'integerProperty'));
+
+        $setStringParamType = $this->getParameterType($className, 'setStringProperty');
+        $this->assertNotNull($setStringParamType);
+        $this->assertSame('string', $setStringParamType->getName());
+        $this->assertTrue($setStringParamType->allowsNull());
+
+        $setIntParamType = $this->getParameterType($className, 'setIntegerProperty');
+        $this->assertNotNull($setIntParamType);
+        $this->assertSame('int', $setIntParamType->getName());
+        $this->assertTrue($setIntParamType->allowsNull());
+
+        // branch 1 matches: stringProperty is stored, integerProperty is absent (null)
+        $object = new $className(['stringProperty' => 'hello']);
+        $this->assertSame('hello', $object->getStringProperty());
+        $this->assertNull($object->getIntegerProperty());
+
+        // branch 2 matches: integerProperty is stored, stringProperty is absent (null)
+        $object = new $className(['integerProperty' => 42]);
+        $this->assertNull($object->getStringProperty());
+        $this->assertSame(42, $object->getIntegerProperty());
+    }
+
+    #[DataProvider('propertyLevelAnyOfSchemaFileDataProvider')]
+    public function testNotProvidedPropertyLevelAnyOfIsValid(string $schema): void
+    {
+        $className = $this->generateClassFromFile($schema);
+
+        $object = new $className([]);
+        $this->assertNull($object->getProperty());
+    }
+
+    public static function propertyLevelAnyOfSchemaFileDataProvider(): array
+    {
+        return [
+            'Scalar types' => ['AnyOfType.json'],
+            'Property level composition' => ['ExtendedPropertyDefinition.json'],
+            'Object with scalar type and one object' => ['ReferencedObjectSchema.json'],
+            'Multiple objects' => ['ReferencedObjectSchema2.json'],
+            'Object with scalar type and multiple objects' => ['ReferencedObjectSchema3.json'],
+            'Empty any of' => ['EmptyAnyOf.json'],
+        ];
+    }
+
+    /**
+     * Throws an exception as it's not valid against any of the given schemas
+     */
+    public function testNotProvidedObjectLevelAnyOfNotMatchingAnyOptionThrowsAnException(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches(
+            '/^Invalid value for (.*?) declined by composition constraint.\s*' .
+            'Requires to match at least one composition element.\s*$/',
+        );
+
+        $className = $this->generateClassFromFile('ObjectLevelCompositionRequired.json');
+
+        new $className([]);
+    }
+
+    /**
+     * Throws an exception as it's not valid against any of the given schemas
+     */
+    public function testNotProvidedObjectLevelAnyOfMatchingAllOptionsIsValid(): void
+    {
+        $className = $this->generateClassFromFile('ObjectLevelComposition.json');
+
+        $object = new $className([]);
+        $this->assertEmpty($object->getIntegerProperty());
+        $this->assertEmpty($object->getStringProperty());
+        $this->assertPropertyHasJsonPointer($object, 'stringProperty', '/anyOf/0/properties/stringProperty');
+        $this->assertPropertyHasJsonPointer($object, 'integerProperty', '/anyOf/1/properties/integerProperty');
+    }
+
+    #[DataProvider('validPropertyTypeDataProvider')]
+    #[DataProvider('nullDataProvider')]
+    public function testValidProvidedAnyOfTypePropertyIsValid(mixed $propertyValue): void
+    {
+        $className = $this->generateClassFromFile('AnyOfType.json');
+
+        $object = new $className(['property' => $propertyValue]);
+        $this->assertSame($propertyValue, $object->getProperty());
+    }
+
+    #[DataProvider('annotationDataProvider')]
+    public function testAnyOfTypePropertyHasTypeAnnotation(
+        string $schema,
+        string $annotationPattern,
+        int $generatedClasses,
+    ): void {
+        $className = $this->generateClassFromFile($schema);
+
+        $this->assertMatchesRegularExpression($annotationPattern, $this->getPropertyTypeAnnotation($className, 'property'));
+        $this->assertMatchesRegularExpression($annotationPattern, $this->getReturnTypeAnnotation($className, 'getProperty'));
+
+        $this->assertCount($generatedClasses, $this->getGeneratedFiles());
+    }
+
+    public static function annotationDataProvider(): array
+    {
+        return [
+            'Multiple scalar types (no merged property)' => [
+                'AnyOfType.json',
+                '/^string\|int\|bool\|null$/',
+                1,
+            ],
+            'Multiple scalar types required (no merged property)' => [
+                'AnyOfTypeRequired.json',
+                '/^string\|int\|bool$/',
+                1,
+            ],
+            'Object with scalar type (no merged property - redirect to generated object)' => [
+                'ReferencedObjectSchema.json',
+                '/^string\|ComposedAnyOfTest[\w]*Property[\w]*\|null$/',
+                2,
+            ],
+            'Multiple objects (merged property created)' => [
+                'ReferencedObjectSchema2.json',
+                '/^ComposedAnyOfTest[\w]*_Merged_[\w]*\|null$/',
+                4,
+            ],
+            'Scalar type and multiple objects (merged property created)' => [
+                'ReferencedObjectSchema3.json',
+                '/^string\|ComposedAnyOfTest[\w]*_Merged_[\w]*\|null$/',
+                4,
+            ],
+        ];
+    }
+
+    #[DataProvider('invalidPropertyTypeDataProvider')]
+    public function testInvalidProvidedAnyOfTypePropertyThrowsAnException(mixed $propertyValue): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by composition constraint');
+
+        $className = $this->generateClassFromFile('AnyOfType.json');
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function validPropertyTypeDataProvider(): array
+    {
+        return [
+            'empty string' => [''],
+            'numeric string' => ['100'],
+            'word string' => ['Hello'],
+            'negative int' => [-10],
+            'zero int' => [0],
+            'positive int' => [10],
+            'bool' => [true],
+        ];
+    }
+
+    public static function invalidPropertyTypeDataProvider(): array
+    {
+        return [
+            'float' => [0.92],
+            'array' => [[]],
+            'object' => [new stdClass()],
+        ];
+    }
+
+
+    #[DataProvider('validPropertyTypeDataProvider')]
+    public function testValidProvidedRequiredAnyOfTypePropertyIsValid(mixed $propertyValue): void
+    {
+        $className = $this->generateClassFromFile('AnyOfTypeRequired.json');
+
+        $object = new $className(['property' => $propertyValue]);
+        $this->assertSame($propertyValue, $object->getProperty());
+    }
+
+    #[DataProvider('invalidPropertyTypeDataProvider')]
+    #[DataProvider('nullDataProvider')]
+    public function testInvalidProvidedRequiredAnyOfTypePropertyThrowsAnException(mixed $propertyValue): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by composition constraint');
+
+        $className = $this->generateClassFromFile('AnyOfTypeRequired.json');
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function nullDataProvider(): array
+    {
+        return ['null' => [null]];
+    }
+
+    #[DataProvider('validExtendedPropertyDataProvider')]
+    public function testExtendedPropertyDefinitionWithValidValues(int | float | null $propertyValue): void
+    {
+        $className = $this->generateClassFromFile('ExtendedPropertyDefinition.json');
+
+        $object = new $className(['property' => $propertyValue]);
+        // cast expected to float as an int is casted to an float internally for a number property
+        $this->assertSame(is_int($propertyValue) ? (float) $propertyValue : $propertyValue, $object->getProperty());
+    }
+
+    public static function validExtendedPropertyDataProvider(): array
+    {
+        return [
+            'one match - int 12' => [12],
+            'one match - float 12.' => [12.],
+            'one match - int 15' => [15],
+            'null' => [null],
+            'multiple matches - int 10' => [10],
+            'multiple matches - int 20' => [20],
+            'multiple matches - float 10.' => [10.],
+        ];
+    }
+
+    #[DataProvider('invalidExtendedPropertyDataProvider')]
+    public function testExtendedPropertyDefinitionWithInvalidValuesThrowsAnException(
+        mixed $propertyValue,
+        string $exceptionMessage,
+    ): void {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage($exceptionMessage);
+
+        $className = $this->generateClassFromFile('ExtendedPropertyDefinition.json');
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function invalidExtendedPropertyDataProvider(): array
+    {
+        return [
+            'int 13' => [13, 'Invalid value for property declined by composition constraint'],
+            'float 9.9' => [9.9, 'Value for property must not be smaller than 10'],
+            'int 8' => [8, 'Value for property must not be smaller than 10'],
+            'bool' => [true, 'Invalid type for property'],
+            'array' => [[], 'Invalid type for property'],
+            'object' => [new stdClass(), 'Invalid type for property'],
+            'string' => ['', 'Invalid type for property'],
+        ];
+    }
+
+    #[DataProvider('composedPropertyWithReferencedSchemaDataProvider')]
+    public function testMatchingComposedPropertyWithReferencedSchemaIsValid(
+        string $schema,
+        ?string $propertyValue,
+    ): void {
+        $className = $this->generateClassFromFile($schema);
+
+        $object = new $className(['property' => $propertyValue]);
+        $this->assertSame($propertyValue, $object->getProperty());
+    }
+
+    public static function composedPropertyWithReferencedSchemaDataProvider(): array
+    {
+        return self::combineDataProvider(
+            [
+                'ReferencedObjectSchema.json' => ['ReferencedObjectSchema.json'],
+                'ReferencedObjectSchema3.json' => ['ReferencedObjectSchema3.json'],
+            ],
+            [
+                'null' => [null],
+                'string matching required length' => ['Hanne'],
+            ],
+        );
+    }
+
+    #[DataProvider('referencedPersonDataProvider')]
+    public function testMatchingObjectPropertyWithReferencedPersonSchemaIsValid(string $schema): void
+    {
+        $className = $this->generateClassFromFile($schema);
+
+        $object = new $className(['property' => ['name' => 'Ha', 'age' => 42]]);
+
+        $this->assertTrue(is_object($object->getProperty()));
+        $this->assertSame('Ha', $object->getProperty()->getName());
+        $this->assertSame(42, $object->getProperty()->getAge());
+    }
+
+    public static function referencedPersonDataProvider(): array
+    {
+        return [
+            'ReferencedObjectSchema.json' => ['ReferencedObjectSchema.json'],
+            'ReferencedObjectSchema2.json' => ['ReferencedObjectSchema2.json'],
+            'ReferencedObjectSchema3.json' => ['ReferencedObjectSchema3.json'],
+        ];
+    }
+
+    public static function referencedPetDataProvider(): array
+    {
+        return [
+            'ReferencedObjectSchema2.json' => ['ReferencedObjectSchema2.json'],
+            'ReferencedObjectSchema3.json' => ['ReferencedObjectSchema3.json'],
+        ];
+    }
+
+    #[DataProvider('referencedPetDataProvider')]
+    public function testMatchingObjectPropertyWithReferencedPetSchemaIsValid(string $schema): void
+    {
+        $className = $this->generateClassFromFile($schema);
+
+        $object = new $className(['property' => ['race' => 'Horse']]);
+
+        $this->assertTrue(is_object($object->getProperty()));
+        $this->assertSame('Horse', $object->getProperty()->getRace());
+    }
+
+    #[DataProvider('invalidObjectPropertyWithReferencedPersonSchemaDataProvider')]
+    public function testNotMatchingObjectPropertyWithReferencedPersonSchemaThrowsAnException(
+        string $schema,
+        mixed $propertyValue,
+    ): void {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by composition constraint');
+
+        $className = $this->generateClassFromFile($schema);
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function invalidObjectPropertyWithReferencedPersonSchemaDataProvider(): array
+    {
+        return self::combineDataProvider(
+            self::referencedPersonDataProvider(),
+            [
+                'int' => [0],
+                'float' => [0.92],
+                'bool' => [true],
+                'object' => [new stdClass()],
+                'empty string' => [''],
+                'Too short string' => ['Hann'],
+                'empty array' => [[]],
+                'Missing property' => [['name' => 'Hannes']],
+                'Too many properties' => [['name' => 'Hannes', 'age' => 42, 'alive' => true]],
+                'Matching object with invalid type' => [['name' => 'Hannes', 'age' => '42']],
+                'Matching object with invalid data' => [['name' => 'H', 'age' => 42]],
+            ],
+        );
+    }
+
+    #[DataProvider('invalidObjectPropertyWithReferencedPetSchemaDataProvider')]
+    public function testNotMatchingObjectPropertyWithReferencedPetSchemaThrowsAnException(
+        string $schema,
+        mixed $propertyValue,
+    ): void {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by composition constraint');
+
+        $className = $this->generateClassFromFile($schema);
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function invalidObjectPropertyWithReferencedPetSchemaDataProvider(): array
+    {
+        return self::combineDataProvider(
+            self::referencedPetDataProvider(),
+            [
+                'int' => [0],
+                'float' => [0.92],
+                'bool' => [true],
+                'object' => [new stdClass()],
+                // a string is allowed by ReferencedObjectSchema3 but must be declined due to length violation
+                'string' => ['Cat'],
+                'empty array' => [[]],
+                'Too many properties' => [['race' => 'Horse', 'alive' => true]],
+                'Matching object with invalid type' => [['race' => 123]],
+                'Matching object with invalid data' => [['race' => 'H']],
+            ],
+        );
+    }
+
+    #[DataProvider('validComposedObjectDataProvider')]
+    #[DataProvider('validComposedObjectDataProviderRequired')]
+    #[DataProvider('validComposedObjectWithRequiredPropertiesDataProvider')]
+    public function testMatchingPropertyForComposedAnyOfObjectIsValid(
+        array $input,
+        mixed $stringPropertyValue,
+        mixed $intPropertyValue,
+    ): void {
+        $className = $this->generateClassFromFile('ObjectLevelComposition.json');
+
+        $object = new $className($input);
+        $this->assertSame($stringPropertyValue, $object->getStringProperty());
+        $this->assertSame($intPropertyValue, $object->getIntegerProperty());
+    }
+
+    public static function validComposedObjectDataProvider(): array
+    {
+        return [
+            'no properties' => [[], null, null],
+            'only additional property' => [['test' => 1234], null, null],
+            'both null' => [['integerProperty' => null, 'stringProperty' => null], null, null],
+        ];
+    }
+
+    public static function validComposedObjectDataProviderRequired(): array
+    {
+        // Raw input values are preserved in both properties regardless of which branch matched.
+        // The non-matching branch's property retains the raw input value (no null-truncation).
+        return [
+            'negative int' => [['integerProperty' => -10, 'stringProperty' => -10], -10, -10],
+            'zero int' => [['integerProperty' => 0, 'stringProperty' => 0], 0, 0],
+            'positive int' => [['integerProperty' => 10, 'stringProperty' => 10], 10, 10],
+            'empty string' => [['integerProperty' => '', 'stringProperty' => ''], '', ''],
+            'numeric string' => [['integerProperty' => '100', 'stringProperty' => '100'], '100', '100'],
+            'filled string' => [['integerProperty' => 'Hello', 'stringProperty' => 'Hello'], 'Hello', 'Hello'],
+            'additional property' => [['integerProperty' => 'A', 'stringProperty' => 'A', 'test' => 1234], 'A', 'A'],
+        ];
+    }
+
+    #[DataProvider('invalidComposedObjectDataProvider')]
+    public function testNotMatchingPropertyForComposedAnyOfObjectThrowsAnException(array $input): void
+    {
+        $this->expectException(ValidationException::class);
+
+        $className = $this->generateClassFromFile('ObjectLevelComposition.json');
+
+        new $className($input);
+    }
+
+    public static function invalidComposedObjectDataProvider(): array
+    {
+        return [
+            'both invalid types' => [['integerProperty' => '10', 'stringProperty' => 10]],
+            'both invalid types float' => [['integerProperty' => 0.4, 'stringProperty' => 0.4]],
+            'both invalid types bool' => [['integerProperty' => true, 'stringProperty' => false]],
+            'both invalid types object' => [['integerProperty' => new stdClass(), 'stringProperty' => new stdClass()]],
+            'both invalid types array' => [['integerProperty' => [], 'stringProperty' => []]],
+        ];
+    }
+
+
+    #[DataProvider('validComposedObjectDataProviderRequired')]
+    #[DataProvider('validComposedObjectWithRequiredPropertiesDataProvider')]
+    public function testMatchingPropertyForComposedAnyOfObjectWithRequiredPropertiesIsValid(
+        array $input,
+        mixed $stringPropertyValue,
+        mixed $intPropertyValue,
+    ): void {
+        $className = $this->generateClassFromFile('ObjectLevelCompositionRequired.json');
+
+        $object = new $className($input);
+        $this->assertSame($stringPropertyValue, $object->getStringProperty());
+        $this->assertSame($intPropertyValue, $object->getIntegerProperty());
+    }
+
+    #[DataProvider('invalidComposedObjectDataProvider')]
+    public function testNotMatchingPropertyForComposedAnyOfObjectWithRequiredPropertiesThrowsAnException(array $input): void
+    {
+        $this->expectException(ValidationException::class);
+
+        $className = $this->generateClassFromFile('ObjectLevelCompositionRequired.json');
+
+        new $className($input);
+    }
+
+    public static function validComposedObjectWithRequiredPropertiesDataProvider(): array
+    {
+        return [
+            'only int property' => [['integerProperty' => 4], null, 4],
+            'only string property' => [['stringProperty' => 'B'], 'B', null],
+            'only int property with additional property' => [['integerProperty' => 4, 'test' => 1234], null, 4],
+            'only string property with additional property' => [['stringProperty' => 'B', 'test' => 1234], 'B', null],
+        ];
+    }
+
+    #[DataProvider('validationInSetterDataProvider')]
+    public function testValidationInSetterMethods(
+        GeneratorConfiguration $generatorConfiguration,
+        string $exceptionMessageBothInvalid,
+    ): void {
+        $className = $this->generateClassFromFile(
+            'ObjectLevelCompositionRequired.json',
+            $generatorConfiguration->setImmutable(false),
+        );
+
+        $object = new $className(['integerProperty' => 2]);
+
+        // test a valid change
+        $object->setIntegerProperty(4);
+        $this->assertSame(4, $object->getIntegerProperty());
+        $this->assertNull($object->getStringProperty());
+
+        // set the string to null is a valid step as the composition stays valid
+        $object->setStringProperty(null);
+        $this->assertSame(4, $object->getIntegerProperty());
+        $this->assertNull($object->getStringProperty());
+
+        $object->setStringProperty('Hello');
+        $this->assertSame(4, $object->getIntegerProperty());
+        $this->assertSame('Hello', $object->getStringProperty());
+
+        $object->setIntegerProperty(null);
+        $this->assertNull($object->getIntegerProperty());
+        $this->assertSame('Hello', $object->getStringProperty());
+
+        // test an invalid change (both properties invalid)
+        try {
+            $object->setStringProperty(null);
+            $this->fail('Exception not thrown');
+        } catch (ErrorRegistryException | AnyOfException $exception) {
+            $this->assertStringContainsString($exceptionMessageBothInvalid, $exception->getMessage());
+        }
+
+        // make sure the internal state of the object hasn't changed after an invalid access
+        $this->assertNull($object->getIntegerProperty());
+        $this->assertSame('Hello', $object->getStringProperty());
+
+        // test valid changes again to make sure the internal validation state is correct after invalid accesses
+        $object->setIntegerProperty(6);
+        $this->assertSame(6, $object->getIntegerProperty());
+        $this->assertSame('Hello', $object->getStringProperty());
+
+        $object->setStringProperty(null);
+        $this->assertSame(6, $object->getIntegerProperty());
+        $this->assertNull($object->getStringProperty());
+    }
+
+    public static function validationInSetterDataProvider(): array
+    {
+        return [
+            'Exception Collection' => [
+                (new GeneratorConfiguration())->setCollectErrors(true),
+                <<<ERROR
+declined by composition constraint.
+  Requires to match at least one composition element.
+  - Composition element #1: Failed
+    * Invalid type for stringProperty. Requires string, got NULL
+  - Composition element #2: Failed
+    * Invalid type for integerProperty. Requires int, got NULL
+ERROR
+            ],
+            'Direct Exception' => [
+                (new GeneratorConfiguration())->setCollectErrors(false),
+                <<<ERROR
+declined by composition constraint.
+  Requires to match at least one composition element.
+ERROR
+            ],
+        ];
+    }
+}

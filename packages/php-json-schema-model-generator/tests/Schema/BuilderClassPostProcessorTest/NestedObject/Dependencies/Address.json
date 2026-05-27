@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "properties": {
+    "street": {
+      "type": "string"
+    },
+    "number": {
+      "type": "integer"
+    },
+    "building": {
+      "type": "object",
+      "title": "Building",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

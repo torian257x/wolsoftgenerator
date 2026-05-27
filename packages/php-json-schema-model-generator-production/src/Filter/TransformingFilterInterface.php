@@ -1,0 +1,14 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PHPModelGenerator\Filter;
+
+interface TransformingFilterInterface extends FilterInterface
+{
+    /**
+     * Return the serializer to apply to transformed values.
+     * Make sure the returned array is a callable which is also callable after the render process
+     */
+    public function getSerializer(): array;
+}

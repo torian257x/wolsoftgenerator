@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "patternProperties": {
+    "%s": {
+      "type": "string"
+    }
+  }
+}

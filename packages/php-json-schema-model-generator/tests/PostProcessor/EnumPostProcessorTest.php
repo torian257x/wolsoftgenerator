@@ -1,0 +1,637 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PHPModelGenerator\Tests\PostProcessor;
+
+use BackedEnum;
+use PHPModelGenerator\Exception\Generic\EnumException;
+use PHPModelGenerator\Exception\Generic\InvalidTypeException;
+use PHPModelGenerator\Exception\Object\RequiredValueException;
+use PHPModelGenerator\Exception\SchemaException;
+use PHPModelGenerator\Model\GeneratorConfiguration;
+use PHPModelGenerator\ModelGenerator;
+use PHPModelGenerator\SchemaProcessor\PostProcessor\BuilderClassPostProcessor;
+use PHPModelGenerator\SchemaProcessor\PostProcessor\EnumPostProcessor;
+use PHPModelGenerator\Tests\AbstractPHPModelGeneratorTestCase;
+use ReflectionEnum;
+use TypeError;
+use UnitEnum;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+class EnumPostProcessorTest extends AbstractPHPModelGeneratorTestCase
+{
+    public function testStringOnlyEnum(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate(
+            'EnumProperty.json',
+            ['["hans", "dieter"]'],
+            (new GeneratorConfiguration())
+                ->setImmutable(false)
+                ->setCollectErrors(false)
+                ->setSerialization(true),
+            false,
+        );
+
+        $this->assertGeneratedEnums(1);
+
+        $object = new $className(['property' => 'hans', 'stringProperty' => 'abc']);
+        $this->assertSame('hans', $object->getProperty()->value);
+        $this->assertSame('abc', $object->getStringProperty());
+        $this->assertSame(['property' => 'hans', 'stringProperty' => 'abc'], $object->toArray());
+
+        $object->setProperty('dieter');
+        $this->assertSame('dieter', $object->getProperty()->value);
+
+        $object->setProperty(null);
+        $this->assertNull($object->getProperty());
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $this->assertTrue($returnType->allowsNull());
+        $enum = $returnType->getName();
+        $this->assertTrue(enum_exists($enum));
+
+        $reflectionEnum = new ReflectionEnum($enum);
+        $enumName = $reflectionEnum->getShortName();
+
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'null'],
+            explode('|', $this->getReturnTypeAnnotation($object, 'getProperty')),
+        );
+
+        $this->assertSame('string', $reflectionEnum->getBackingType()->getName());
+
+        $this->assertEqualsCanonicalizing(
+            ['Hans', 'Dieter'],
+            array_map(fn(BackedEnum $value): string => $value->name, $enum::cases()),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['hans', 'dieter'],
+            array_map(fn(BackedEnum $value): string => $value->value, $enum::cases()),
+        );
+
+        $object->setProperty($enum::Dieter);
+        $this->assertSame('dieter', $object->getProperty()->value);
+
+        $this->assertEqualsCanonicalizing(
+            [$enum, 'string', 'null'],
+            $this->getParameterTypeNames($object, 'setProperty'),
+        );
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'string', 'null'],
+            explode('|', $this->getParameterTypeAnnotation($object, 'setProperty')),
+        );
+
+        $this->expectException(EnumException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $object->setProperty('Meier');
+    }
+
+    public function testInvalidStringOnlyEnumValueThrowsAnException(): void
+    {
+        $this->addPostProcessor();
+        $className = $this->generateClassFromFileTemplate('EnumProperty.json', ['["Hans", "Dieter"]'], null, false);
+
+        $this->expectException(EnumException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+
+        new $className(['property' => 'Meier']);
+    }
+
+    public function testInvalidEnumThrowsAnException(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate('EnumProperty.json', ['["Hans", "Dieter"]'], null, false);
+
+        $this->expectException(InvalidTypeException::class);
+        $this->expectExceptionMessageMatches(
+            '/Invalid type for property\. Requires EnumPostProcessorTest_.*Property, got PHPModelGenerator\\\\Tests\\\\PostProcessor\\\\IntEnum/',
+        );
+
+        new $className(['property' => IntEnum::A]);
+    }
+
+    public function testMappedStringOnlyEnum(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate(
+            'EnumPropertyMapped.json',
+            ['["Hans", "Dieter"]', '{"Ceo": "Hans", "Cto": "Dieter"}'],
+            (new GeneratorConfiguration())
+                ->setImmutable(false)
+                ->setCollectErrors(false)
+                ->setSerialization(true),
+            false,
+        );
+
+        $object = new $className(['property' => 'Hans']);
+        $this->assertSame('Hans', $object->getProperty()->value);
+        $this->assertSame('Ceo', $object->getProperty()->name);
+        $this->assertSame(['property' => 'Hans'], $object->toArray());
+
+        $object->setProperty('Dieter');
+        $this->assertSame('Dieter', $object->getProperty()->value);
+        $this->assertSame('Cto', $object->getProperty()->name);
+
+        $object->setProperty(null);
+        $this->assertNull($object->getProperty());
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $this->assertTrue($returnType->allowsNull());
+        $enum = $returnType->getName();
+
+        $this->assertSame('string', (new ReflectionEnum($enum))->getBackingType()->getName());
+
+        $this->assertEqualsCanonicalizing(
+            ['Ceo', 'Cto'],
+            array_map(fn(BackedEnum $value): string => $value->name, $enum::cases()),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['Hans', 'Dieter'],
+            array_map(fn(BackedEnum $value): string => $value->value, $enum::cases()),
+        );
+
+        $object->setProperty($enum::Ceo);
+        $this->assertSame('Hans', $object->getProperty()->value);
+    }
+
+    #[DataProvider('unmappedEnumThrowsAnExceptionDataProvider')]
+    public function testUnmappedEnumThrowsAnException(string $enumValues): void
+    {
+        $this->expectException(SchemaException::class);
+        $this->expectExceptionMessage("Unmapped enum property in file");
+
+        $this->addPostProcessor();
+
+        $this->generateClassFromFileTemplate('EnumProperty.json', [$enumValues], null, false);
+    }
+
+    public static function unmappedEnumThrowsAnExceptionDataProvider(): array
+    {
+        return [
+            'int enum'                         => ['[0, 1, 2]'],
+            'mixed enum with string values'    => ['["dieter", 1, "hans"]'],
+            'mixed enum without string values' => ['[0, 1, false, true]'],
+        ];
+    }
+
+    public function testUnmappedEnumIsSkippedWithEnabledSkipOption(): void
+    {
+        $this->modifyModelGenerator = static function (ModelGenerator $generator): void {
+            $generator->addPostProcessor(
+                new EnumPostProcessor(
+                    join(DIRECTORY_SEPARATOR, [sys_get_temp_dir(), 'PHPModelGeneratorTest', 'Enum']),
+                    'Enum',
+                    true,
+                )
+            );
+        };
+
+        $className = $this->generateClassFromFileTemplate('EnumProperty.json', ['[0, 1, 2]'], null, false);
+
+        $this->assertGeneratedEnums(0);
+
+        $object = new $className(['property' => 1]);
+        $this->assertSame(1, $object->getProperty());
+    }
+
+    #[DataProvider('invalidEnumMapThrowsAnExceptionDataProvider')]
+    public function testInvalidEnumMapThrowsAnException(string $enumValues, string $enumMap): void
+    {
+        $this->expectException(SchemaException::class);
+        $this->expectExceptionMessage("invalid enum map property in file");
+
+        $this->addPostProcessor();
+
+        $this->generateClassFromFileTemplate('EnumPropertyMapped.json', [$enumValues, $enumMap], null, false);
+    }
+
+    public static function invalidEnumMapThrowsAnExceptionDataProvider(): array
+    {
+        return [
+            'invalid map (int)'                 => ['[0, 1, 2]',       '100'],
+            'invalid map (array)'               => ['[0, 1, 2]',       '[0, 1, 2]'],
+            'missing mapped elements (int)'     => ['[0, 1, 2]',       '{"a": 0, "b": 1}'],
+            'too many mapped elements (int)'    => ['[0, 1]',          '{"a": 0, "b": 1, "c": 2}'],
+            'wrong elements mapped (int)'       => ['[0, 1]',          '{"a": 0, "c": 2}'],
+            'missing mapped elements (string)'  => ['["a", "b", "c"]', '{"x": "a", "y": "b"}'],
+            'too many mapped elements (string)' => ['["a", "b"]',      '{"x": "a", "y": "b", "z": "c"}'],
+            'wrong elements mapped (string)'    => ['["a", "b"]',      '{"x": "a", "y": "c"}'],
+        ];
+    }
+
+    public function testIntOnlyEnum(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate(
+            'EnumPropertyMapped.json',
+            ['[10, 100]', '{"a": 10, "b": 100}'],
+            (new GeneratorConfiguration())
+                ->setImmutable(false)
+                ->setCollectErrors(false)
+                ->setSerialization(true),
+            false,
+        );
+
+        $object = new $className(['property' => 10]);
+        $this->assertSame(10, $object->getProperty()->value);
+        $this->assertSame(['property' => 10], $object->toArray());
+
+        $object->setProperty(100);
+        $this->assertSame(100, $object->getProperty()->value);
+
+        $object->setProperty(null);
+        $this->assertNull($object->getProperty());
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $this->assertTrue($returnType->allowsNull());
+        $enum = $returnType->getName();
+
+        $this->assertTrue(enum_exists($enum));
+        $reflectionEnum = new ReflectionEnum($enum);
+        $enumName = $reflectionEnum->getShortName();
+
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'null'],
+            explode('|', $this->getReturnTypeAnnotation($object, 'getProperty')),
+        );
+
+        $this->assertSame('int', $reflectionEnum->getBackingType()->getName());
+
+        $this->assertEqualsCanonicalizing(
+            ['A', 'B'],
+            array_map(fn(BackedEnum $value): string => $value->name, $enum::cases()),
+        );
+        $this->assertEqualsCanonicalizing(
+            [10, 100],
+            array_map(fn(BackedEnum $value): int => $value->value, $enum::cases()),
+        );
+
+        $object->setProperty($enum::A);
+        $this->assertSame(10, $object->getProperty()->value);
+
+        $this->assertEqualsCanonicalizing(
+            [$enum, 'int', 'null'],
+            $this->getParameterTypeNames($object, 'setProperty'),
+        );
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'int', 'null'],
+            explode('|', $this->getParameterTypeAnnotation($object, 'setProperty')),
+        );
+
+        $this->expectException(EnumException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $object->setProperty(1);
+    }
+
+    public function testMixedEnum(): void
+    {
+        $this->addPostProcessor();
+
+        // All scalar types: string, int, bool, float
+        $className = $this->generateClassFromFileTemplate(
+            'EnumPropertyMapped.json',
+            ['["Hans", 100, true, 60.5]', '{"a": "Hans", "b": 100, "c": true, "d": 60.5}'],
+            (new GeneratorConfiguration())->setImmutable(false)->setCollectErrors(false)->setSerialization(true),
+            false,
+        );
+
+        $object = new $className(['property' => 'Hans']);
+        $this->assertSame('Hans', $object->getProperty()->value());
+        $this->assertSame(['property' => 'Hans'], $object->toArray());
+
+        $object->setProperty(100);
+        $this->assertSame(100, $object->getProperty()->value());
+        $this->assertSame(['property' => 100], $object->toArray());
+
+        $object->setProperty(null);
+        $this->assertNull($object->getProperty());
+        $this->assertSame(['property' => null], $object->toArray());
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $this->assertTrue($returnType->allowsNull());
+        $enum = $returnType->getName();
+
+        $this->assertTrue(enum_exists($enum));
+        $reflectionEnum = new ReflectionEnum($enum);
+        $enumName = $reflectionEnum->getShortName();
+
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'null'],
+            explode('|', $this->getReturnTypeAnnotation($object, 'getProperty')),
+        );
+
+        $this->assertNull($reflectionEnum->getBackingType());
+
+        $this->assertEqualsCanonicalizing(
+            ['A', 'B', 'C', 'D'],
+            array_map(fn(UnitEnum $value): string => $value->name, $enum::cases()),
+        );
+
+        $object->setProperty($enum::C);
+        $this->assertTrue($object->getProperty()->value());
+
+        $object->setProperty(60.5);
+        $this->assertSame(60.5, $object->getProperty()->value());
+
+        $this->assertEqualsCanonicalizing(
+            [$enum, 'string', 'int', 'bool', 'float', 'null'],
+            $this->getParameterTypeNames($object, 'setProperty'),
+        );
+
+        $this->assertSame($enum::A, $enum::from('Hans'));
+        $this->assertSame($enum::A, $enum::tryFrom('Hans'));
+        $this->assertNull($enum::tryFrom('Dieter'));
+
+        $this->expectException(EnumException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $object->setProperty(1);
+    }
+
+    public function testEnumPropertyWithTransformingFilterThrowsAnException(): void
+    {
+        $this->expectException(SchemaException::class);
+        $this->expectExceptionMessage("Can't apply enum filter to an already transformed value");
+
+        $this->addPostProcessor();
+        $this->generateClassFromFile('EnumPropertyWithTransformingFilter.json');
+    }
+
+    #[DataProvider('identicalEnumsDataProvider')]
+    public function testIdenticalEnumsAreMappedToOneEnum(string $file, array $enums): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate(
+            $file,
+            $enums,
+            (new GeneratorConfiguration())->setImmutable(false)->setCollectErrors(false),
+            false,
+        );
+
+        $this->assertGeneratedEnums(1);
+
+        $object = new $className(['property1' => 'Hans', 'property2' => 'Dieter']);
+        $this->assertSame('Hans', $object->getProperty1()->value);
+        $this->assertSame('Dieter', $object->getProperty2()->value);
+
+        $this->assertSame($object->getProperty1()::class, $object->getProperty2()::class);
+    }
+
+    public static function identicalEnumsDataProvider(): array
+    {
+        return [
+            'simple enum' => [
+                'MultipleEnumProperties.json',
+                ['["Hans", "Dieter"]', '["Dieter", "Hans"]'],
+            ],
+            'mapped enum' => [
+                'MultipleEnumPropertiesMapped.json',
+                [
+                    '"names of attendees"', '["Hans", "Dieter"]', '{"a": "Hans", "b": "Dieter"}',
+                    '"names of attendees"', '["Dieter", "Hans"]', '{"b": "Dieter", "a": "Hans"}',
+                ],
+            ],
+        ];
+    }
+
+    #[DataProvider('differentEnumsDataProvider')]
+    public function testDifferentEnumsAreNotMappedToOneEnum(string $file, array $enums): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate(
+            $file,
+            $enums,
+            (new GeneratorConfiguration())->setImmutable(false)->setCollectErrors(false),
+            false,
+        );
+
+        $this->assertGeneratedEnums(2);
+        $object = new $className(['property1' => 'Hans', 'property2' => 'Dieter']);
+
+        $this->assertSame('Hans', $object->getProperty1()->value);
+        $this->assertSame('Dieter', $object->getProperty2()->value);
+
+        $this->assertNotSame($object->getProperty1()::class, $object->getProperty2()::class);
+    }
+
+    public static function differentEnumsDataProvider(): array
+    {
+        return [
+            'different values' => [
+                'MultipleEnumProperties.json',
+                ['["Hans", "Dieter"]', '["Dieter", "Anna"]'],
+            ],
+            'different $id' => [
+                'MultipleEnumPropertiesMapped.json',
+                [
+                    '"owners"', '["Hans", "Dieter"]', '{"a": "Hans", "b": "Dieter"}',
+                    '"attendees"', '["Hans", "Dieter"]', '{"a": "Hans", "b": "Dieter"}',
+                ],
+            ],
+            'different values mapped enum' => [
+                'MultipleEnumPropertiesMapped.json',
+                [
+                    '"visitors"', '["Hans", "Anna"]', '{"a": "Hans", "b": "Anna"}',
+                    '"visitors"', '["Hans", "Dieter"]', '{"a": "Hans", "b": "Dieter"}',
+                ],
+            ],
+            'different mapping' => [
+                'MultipleEnumPropertiesMapped.json',
+                [
+                    '"members"', '["Hans", "Dieter"]', '{"a": "Hans", "b": "Dieter"}',
+                    '"members"', '["Hans", "Dieter"]', '{"a": "Dieter", "b": "Hans"}',
+                ],
+            ],
+        ];
+    }
+
+    public function testDefaultValue(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFile('EnumPropertyDefaultValue.json');
+
+        $object = new $className();
+        $this->assertSame('first_value', $object->getProperty()->value);
+        $this->assertSame('FirstValue', $object->getProperty()->name);
+
+        $object = new $className(['property' => '2_value']);
+        $this->assertSame('2_value', $object->getProperty()->value);
+        $this->assertSame('_2Value', $object->getProperty()->name);
+    }
+
+    public function testNotProvidedRequiredEnumThrowsAnException(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFile('EnumPropertyRequired.json');
+
+        $this->expectException(RequiredValueException::class);
+        $this->expectExceptionMessage('Missing required value for property');
+
+        new $className();
+    }
+
+    public function testRequiredEnum(): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFile(
+            'EnumPropertyRequired.json',
+            (new GeneratorConfiguration())->setImmutable(false)->setCollectErrors(false),
+        );
+
+        $object = new $className(['property' => 'Dieter']);
+        $this->assertSame('Dieter', $object->getProperty()->value);
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $this->assertFalse($returnType->allowsNull());
+        $enum = $returnType->getName();
+
+        $reflectionEnum = new ReflectionEnum($enum);
+        $enumName = $reflectionEnum->getShortName();
+
+        $this->assertSame($enumName, $this->getReturnTypeAnnotation($object, 'getProperty'));
+
+        $object->setProperty($enum::Hans);
+        $this->assertSame('Hans', $object->getProperty()->value);
+
+        $this->assertEqualsCanonicalizing(
+            [$enum, 'string'],
+            $this->getParameterTypeNames($object, 'setProperty'),
+        );
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'string'],
+            explode('|', $this->getParameterTypeAnnotation($object, 'setProperty')),
+        );
+
+        $this->expectException(TypeError::class);
+
+        $object->setProperty(null);
+    }
+
+    public function testEmptyNormalizedCaseNameThrowsAnException(): void
+    {
+        $this->addPostProcessor();
+
+        $this->expectException(SchemaException::class);
+        $this->expectExceptionMessage("Name '__ -- __' results in an empty name");
+
+        $this->generateClassFromFileTemplate('EnumProperty.json', ['["__ -- __"]'], null, false);
+    }
+
+    #[DataProvider('normalizedNamesDataProvider')]
+    public function testNameNormalization(string $name, string $expectedNormalizedName): void
+    {
+        $this->addPostProcessor();
+
+        $className = $this->generateClassFromFileTemplate('EnumProperty.json', [sprintf('["%s"]', $name)], null, false);
+
+        $object = new $className();
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $enum = $returnType->getName();
+
+        $this->assertSame(
+            [$expectedNormalizedName],
+            array_map(fn(BackedEnum $value): string => $value->name, $enum::cases()),
+        );
+    }
+
+    public function testEnumForBuilderClass(): void
+    {
+        $this->modifyModelGenerator = static function (ModelGenerator $generator): void {
+            $generator
+                ->addPostProcessor(new BuilderClassPostProcessor())
+                ->addPostProcessor(
+                    new EnumPostProcessor(
+                        join(DIRECTORY_SEPARATOR, [sys_get_temp_dir(), 'PHPModelGeneratorTest', 'Enum']),
+                        'Enum',
+                    )
+                );
+        };
+
+        $className = $this->generateClassFromFileTemplate('EnumProperty.json', ['["hans", "dieter"]'], escape: false);
+        $builderClassName = $className . 'Builder';
+
+        $this->assertGeneratedEnums(1);
+
+        $builder = new $builderClassName();
+        $builder->setProperty('dieter');
+
+        $object = $builder->validate();
+        $this->assertInstanceOf($className, $object);
+        $this->assertSame('dieter', $object->getProperty()->value);
+
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $enum = $returnType->getName();
+        $this->assertTrue(enum_exists($enum));
+
+        $reflectionEnum = new ReflectionEnum($enum);
+        $enumName = $reflectionEnum->getShortName();
+
+        $this->assertEqualsCanonicalizing(
+            [$enum, 'string', 'null'],
+            $this->getReturnTypeNames($builder, 'getProperty'),
+        );
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'string', 'null'],
+            explode('|', $this->getReturnTypeAnnotation($builder, 'getProperty')),
+        );
+
+        $this->assertEqualsCanonicalizing(
+            [$enum, 'string', 'null'],
+            $this->getParameterTypeNames($builder, 'setProperty'),
+        );
+        $this->assertEqualsCanonicalizing(
+            [$enumName, 'string', 'null'],
+            explode('|', $this->getParameterTypeAnnotation($builder, 'setProperty')),
+        );
+
+        $builder->setProperty($enum::Hans);
+        $object = $builder->validate();
+        $this->assertInstanceOf($className, $object);
+        $this->assertSame('hans', $object->getProperty()->value);
+
+        $builder->setProperty('Meier');
+        $this->expectException(EnumException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $builder->validate();
+    }
+
+    public static function normalizedNamesDataProvider(): array
+    {
+        return [
+            'includes spaces' => ['not available', 'NotAvailable'],
+            'includes non alphanumeric characters' => ['not-available', 'NotAvailable'],
+            'numeric' => ['100', '_100'],
+        ];
+    }
+
+    private function addPostProcessor(): void
+    {
+        $this->modifyModelGenerator = static function (ModelGenerator $generator): void {
+            $generator->addPostProcessor(
+                new EnumPostProcessor(
+                    join(DIRECTORY_SEPARATOR, [sys_get_temp_dir(), 'PHPModelGeneratorTest', 'Enum']),
+                    'Enum',
+                )
+            );
+        };
+    }
+
+    private function assertGeneratedEnums(int $expectedGeneratedEnums): void
+    {
+        $dir = sys_get_temp_dir() . '/PHPModelGeneratorTest/Enum';
+        $files = array_diff(scandir($dir), ['.', '..']);
+
+        $this->assertCount($expectedGeneratedEnums, $files);
+    }
+}

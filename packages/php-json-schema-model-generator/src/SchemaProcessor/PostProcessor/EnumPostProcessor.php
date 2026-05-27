@@ -1,0 +1,428 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PHPModelGenerator\SchemaProcessor\PostProcessor;
+
+use Exception;
+use PHPMicroTemplate\Render;
+use PHPModelGenerator\Exception\FileSystemException;
+use PHPModelGenerator\Exception\Generic\InvalidTypeException;
+use PHPModelGenerator\Exception\SchemaException;
+use PHPModelGenerator\Filter\TransformingFilterInterface;
+use PHPModelGenerator\Model\GeneratorConfiguration;
+use PHPModelGenerator\Model\Property\PropertyInterface;
+use PHPModelGenerator\Model\Property\PropertyType;
+use PHPModelGenerator\Model\Schema;
+use PHPModelGenerator\Model\SchemaDefinition\JsonSchema;
+use PHPModelGenerator\Model\Validator;
+use PHPModelGenerator\Model\Validator\AbstractComposedPropertyValidator;
+use PHPModelGenerator\Model\Validator\ArrayItemValidator;
+use PHPModelGenerator\Model\Validator\EnumValidator;
+use PHPModelGenerator\Model\Validator\FilterValidator;
+use PHPModelGenerator\Model\Validator\PropertyValidator;
+use PHPModelGenerator\ModelGenerator;
+use PHPModelGenerator\PropertyProcessor\Filter\FilterProcessor;
+use PHPModelGenerator\Utils\ArrayHash;
+use PHPModelGenerator\Utils\NormalizedName;
+
+/**
+ * Generates a PHP enum for enums from JSON schemas which are automatically mapped for properties holding the enum
+ */
+class EnumPostProcessor extends PostProcessor
+{
+    private array $generatedEnums = [];
+
+    private readonly string $namespace;
+    private readonly Render $renderer;
+    private readonly string $targetDirectory;
+
+    /**
+     * @param string $targetDirectory  The directory where to put the generated PHP enums
+     * @param string $namespace        The namespace for the generated enums
+     * @param bool $skipNonMappedEnums By default, enums which not contain only strings and don't provide a mapping for
+     *                                 the enum will throw an exception. If set to true, those enums will be skipped
+     *
+     * @throws Exception
+     */
+    public function __construct(
+        string $targetDirectory,
+        string $namespace,
+        private readonly bool $skipNonMappedEnums = false,
+    ) {
+        (new ModelGenerator())->generateModelDirectory($targetDirectory);
+
+        $this->renderer = new Render(__DIR__ . DIRECTORY_SEPARATOR . 'Templates' . DIRECTORY_SEPARATOR);
+        $this->namespace = trim($namespace, '\\');
+        $this->targetDirectory = $targetDirectory;
+    }
+
+    public function process(Schema $schema, GeneratorConfiguration $generatorConfiguration): void
+    {
+        $generatorConfiguration->addFilter(new EnumFilter());
+
+        foreach ($schema->getProperties() as $property) {
+            $this->processPropertyEnum($property, $schema, $generatorConfiguration);
+        }
+
+        // Process nested enum properties inside composition branches and array items.
+        // These are not part of $schema->getProperties() and must be traversed through
+        // validators (e.g., AbstractComposedPropertyValidator, ArrayItemValidator).
+        foreach ($schema->getProperties() as $property) {
+            $this->processNestedEnumProperties($property, $schema, $generatorConfiguration);
+        }
+    }
+
+    /**
+     * Process a single property that may have an enum definition. Generates a PHP enum class
+     * if the property's JSON schema contains an 'enum' keyword, and updates the property's
+     * type to reference the generated enum class.
+     */
+    private function processPropertyEnum(
+        PropertyInterface $property,
+        Schema $schema,
+        GeneratorConfiguration $generatorConfiguration,
+    ): void {
+        $json = $property->getJsonSchema()->getJson();
+
+        if (!isset($json['enum']) || !$this->validateEnum($property)) {
+            return;
+        }
+
+        $this->checkForExistingTransformingFilter($property);
+
+        $values = $json['enum'];
+        $enumSignature = ArrayHash::hash($json, ['enum', 'enum-map', 'title', '$id']);
+        $enumName = $this->getEnumName($property, $schema, $json);
+
+        if (!isset($this->generatedEnums[$enumSignature])) {
+            $this->generatedEnums[$enumSignature] = [
+                'name' => $enumName,
+                'fqcn' => $this->renderEnum(
+                    $generatorConfiguration,
+                    $schema->getJsonSchema(),
+                    $enumName,
+                    $values,
+                    $json['enum-map'] ?? null,
+                ),
+            ];
+        } else {
+            if ($generatorConfiguration->isOutputEnabled()) {
+                // @codeCoverageIgnoreStart
+                echo "Duplicated signature $enumSignature for enum $enumName." .
+                    " Redirecting to {$this->generatedEnums[$enumSignature]['name']}\n";
+                // @codeCoverageIgnoreEnd
+            }
+        }
+
+        $fqcn = $this->generatedEnums[$enumSignature]['fqcn'];
+        $name = substr((string) $fqcn, strrpos((string) $fqcn, "\\") + 1);
+
+        $inputType = $property->getType();
+
+        (new FilterProcessor())->process(
+            $property,
+            ['filter' => (new EnumFilter())->getToken(), 'fqcn' => $fqcn],
+            $generatorConfiguration,
+            $schema,
+        );
+
+        $schema->addUsedClass($fqcn);
+        $property->setType($inputType, new PropertyType($name, !$property->isRequired()), true);
+
+        if ($property->getDefaultValue()) {
+            $caseName = $this->getCaseName($json['enum-map'] ?? null, $json['default'], $property->getJsonSchema());
+            $property->setDefaultValue("$name::$caseName", true);
+        }
+
+        // remove the enum validator as the validation is performed by the PHP enum
+        $property->filterValidators(
+            static fn(Validator $validator): bool => !is_a($validator->getValidator(), EnumValidator::class),
+        );
+
+        // if an enum value is provided the transforming filter will add a value pass through. As the filter doesn't
+        // know the exact enum type the pass through allows every UnitEnum instance. Consequently add a validator to
+        // avoid wrong enums by validating against the generated enum
+        $schema->addUsedClass($fqcn);
+        $property->addValidator(
+            new class ($property, $name) extends PropertyValidator {
+                public function __construct(PropertyInterface $property, string $enumName)
+                {
+                    parent::__construct(
+                        $property,
+                        sprintf('$value instanceof UnitEnum && !($value instanceof %s)', $enumName),
+                        InvalidTypeException::class,
+                        [$enumName],
+                    );
+                }
+            },
+            0,
+        );
+    }
+
+    /**
+     * Derive the enum class name for a property. Prefers the schema's 'title' or '$id', then
+     * falls back to the $defs/definitions key if the property was resolved from one, and finally
+     * uses the schema class name combined with the property name.
+     */
+    private function getEnumName(PropertyInterface $property, Schema $schema, array $json): string
+    {
+        if (isset($json['title'])) {
+            return $json['title'];
+        }
+
+        if (isset($json['$id'])) {
+            return basename($json['$id']);
+        }
+
+        // If the property's JSON schema has a pointer like "/$defs/MediaBuyStatus",
+        // use the definition key (last segment) as the enum name.
+        $pointer = $property->getJsonSchema()->getPointer();
+        $segments = explode('/', trim($pointer, '/'));
+        if (
+            count($segments) >= 2
+            && in_array($segments[0], ['$defs', 'definitions'], true)
+        ) {
+            return end($segments);
+        }
+
+        return $schema->getClassName() . ucfirst($property->getName());
+    }
+
+    /**
+     * Traverse into composition validators and array item validators to find nested
+     * properties with enum definitions that were not visited by processPropertyEnum
+     * (because they are not direct properties of the schema).
+     */
+    private function processNestedEnumProperties(
+        PropertyInterface $property,
+        Schema $schema,
+        GeneratorConfiguration $generatorConfiguration,
+    ): void {
+        foreach ($property->getValidators() as $validator) {
+            $validatorInstance = $validator->getValidator();
+
+            if ($validatorInstance instanceof AbstractComposedPropertyValidator) {
+                foreach ($validatorInstance->getComposedProperties() as $composedProperty) {
+                    $this->processPropertyEnum($composedProperty, $schema, $generatorConfiguration);
+                    $this->processNestedEnumProperties($composedProperty, $schema, $generatorConfiguration);
+
+                    $this->propagateEnumTypeToParent($property, $composedProperty);
+                }
+            }
+
+            if ($validatorInstance instanceof ArrayItemValidator) {
+                $nestedProperty = $validatorInstance->getNestedProperty();
+                $this->processPropertyEnum($nestedProperty, $schema, $generatorConfiguration);
+                $this->processNestedEnumProperties($nestedProperty, $schema, $generatorConfiguration);
+
+                $this->propagateEnumTypeToParent($property, $nestedProperty);
+            }
+        }
+    }
+
+    /**
+     * If a composed property (inside allOf/oneOf/anyOf or array items) gained an enum output type
+     * from processPropertyEnum, propagate that to the parent property so the PHP type declaration
+     * (getter return type, setter parameter type) includes the enum class name.
+     */
+    private function propagateEnumTypeToParent(
+        PropertyInterface $parentProperty,
+        PropertyInterface $composedProperty,
+    ): void {
+        $composedOutputType = $composedProperty->getType(true);
+        $composedInputType = $composedProperty->getType(false);
+
+        if (
+            $composedOutputType === null
+            || $composedInputType === null
+            || $composedOutputType->getNames() === $composedInputType->getNames()
+        ) {
+            return;
+        }
+
+        $parentInputType = $parentProperty->getType(false);
+        $parentOutputType = $parentProperty->getType(true);
+
+        $mergedNames = $parentInputType !== null ? $parentInputType->getNames() : [];
+
+        foreach ($composedOutputType->getNames() as $name) {
+            if (!in_array($name, $mergedNames, true)) {
+                $mergedNames[] = $name;
+            }
+        }
+
+        if ($parentOutputType !== null) {
+            foreach ($parentOutputType->getNames() as $name) {
+                if (!in_array($name, $mergedNames, true)) {
+                    $mergedNames[] = $name;
+                }
+            }
+        }
+
+        $parentProperty->setType(
+            $parentProperty->getType(false),
+            new PropertyType($mergedNames, !$parentProperty->isRequired()),
+            false,
+        );
+    }
+
+    /**
+     * @throws SchemaException
+     */
+    private function checkForExistingTransformingFilter(PropertyInterface $property): void
+    {
+        foreach ($property->getValidators() as $validator) {
+            $validator = $validator->getValidator();
+
+            if (
+                $validator instanceof FilterValidator
+                && $validator->getFilter() instanceof TransformingFilterInterface
+                && $validator->getFilter()->getToken() !== 'php_model_generator_enum'
+            ) {
+                throw new SchemaException(sprintf(
+                    "Can't apply enum filter to an already transformed value on property %s in file %s",
+                    $property->getName(),
+                    $property->getJsonSchema()->getFile(),
+                ));
+            }
+        }
+    }
+
+    public function postProcess(): void
+    {
+        $this->generatedEnums = [];
+
+        parent::postProcess();
+    }
+
+    /**
+     * @throws SchemaException
+     */
+    private function validateEnum(PropertyInterface $property): bool
+    {
+        $throw = function (string $message) use ($property): void {
+            throw new SchemaException(
+                sprintf(
+                    $message,
+                    $property->getName(),
+                    $property->getJsonSchema()->getFile(),
+                )
+            );
+        };
+
+        $json = $property->getJsonSchema()->getJson();
+
+        $types = $this->getArrayTypes($json['enum']);
+
+        // the enum must contain either only string values or provide a value map to resolve the values
+        if ($types !== ['string'] && !isset($json['enum-map'])) {
+            if ($this->skipNonMappedEnums) {
+                return false;
+            }
+
+            $throw('Unmapped enum %s in file %s');
+        }
+
+        if (isset($json['enum-map'])) {
+            asort($json['enum']);
+            if (is_array($json['enum-map'])) {
+                asort($json['enum-map']);
+            }
+
+            if (
+                !is_array($json['enum-map'])
+                || $this->getArrayTypes(array_keys($json['enum-map'])) !== ['string']
+                || count(array_uintersect(
+                    $json['enum-map'],
+                    $json['enum'],
+                    fn($a, $b): int => $a === $b ? 0 : 1,
+                )) !== count($json['enum'])
+            ) {
+                $throw('invalid enum map %s in file %s');
+            }
+        }
+
+        return true;
+    }
+
+    private function getArrayTypes(array $array): array
+    {
+        return array_unique(array_map(
+            static fn($item): string => gettype($item),
+            $array,
+        ));
+    }
+
+    private function renderEnum(
+        GeneratorConfiguration $generatorConfiguration,
+        JsonSchema $jsonSchema,
+        string $name,
+        array $values,
+        ?array $map,
+    ): string {
+        $cases = [];
+        $name = ucfirst((string) preg_replace('/\W/', '', ucwords($name, '_-. ')));
+
+        foreach ($values as $value) {
+            $cases[$this->getCaseName($map, $value, $jsonSchema)] = var_export($value, true);
+        }
+
+        $backedType = null;
+        switch ($this->getArrayTypes($values)) {
+            case ['string']:
+                $backedType = 'string';
+                break;
+            case ['integer']:
+                $backedType = 'int';
+                break;
+        }
+
+        // make sure different enums with an identical name don't overwrite each other
+        while (in_array("$this->namespace\\$name", array_column($this->generatedEnums, 'fqcn'))) {
+            $name .= '_1';
+        }
+
+        $result = file_put_contents(
+            $filename = $this->targetDirectory . DIRECTORY_SEPARATOR . $name . '.php',
+            $this->renderer->renderTemplate(
+                'Enum.phptpl',
+                [
+                    'namespace' => $this->namespace,
+                    'name' => $name,
+                    'cases' => $cases,
+                    'backedType' => $backedType,
+                ],
+            )
+        );
+
+        $fqcn = "$this->namespace\\$name";
+
+        if ($result === false) {
+            // @codeCoverageIgnoreStart
+            throw new FileSystemException("Can't write enum $fqcn.");
+            // @codeCoverageIgnoreEnd
+        }
+
+        require $filename;
+
+        if ($generatorConfiguration->isOutputEnabled()) {
+            // @codeCoverageIgnoreStart
+            echo "Rendered enum $fqcn\n";
+            // @codeCoverageIgnoreEnd
+        }
+
+        return $fqcn;
+    }
+
+    private function getCaseName(?array $map, mixed $value, JsonSchema $jsonSchema): string
+    {
+        $caseName = ucfirst(NormalizedName::from($map ? array_search($value, $map, true) : $value, $jsonSchema));
+
+        if (preg_match('/^\d/', $caseName) === 1) {
+            return "_$caseName";
+        }
+
+        return $caseName;
+    }
+}

@@ -1,0 +1,418 @@
+<?php
+
+declare(strict_types=1);
+
+namespace PHPModelGenerator\Tests\Objects;
+
+use PHPModelGenerator\Exception\FileSystemException;
+use PHPModelGenerator\Exception\ValidationException;
+use PHPModelGenerator\Exception\RenderException;
+use PHPModelGenerator\Exception\SchemaException;
+use PHPModelGenerator\Model\GeneratorConfiguration;
+use PHPModelGenerator\Tests\AbstractPHPModelGeneratorTestCase;
+use stdClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+
+/**
+ * Class EnumPropertyTest
+ *
+ * @package PHPModelGenerator\Tests\Objects
+ */
+class EnumPropertyTest extends AbstractPHPModelGeneratorTestCase
+{
+    protected const ENUM_STRING = ['red', 'green'];
+
+    /**
+     * @param string $propertyValue
+     *
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    public function testNotProvidedOptionalEnumItemIsValid(): void
+    {
+        $className = $this->generateEnumClass('string', static::ENUM_STRING);
+
+        $object = new $className([]);
+        $this->assertNull($object->getProperty());
+    }
+
+    /**
+     * @param string $propertyValue
+     *
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('validEnumEntriesDataProvider')]
+    public function testEnumItemIsValid(?string $propertyValue): void
+    {
+        $className = $this->generateEnumClass('string', static::ENUM_STRING);
+
+        $object = new $className(['property' => $propertyValue]);
+        $this->assertSame($propertyValue, $object->getProperty());
+    }
+
+    public static function validEnumEntriesDataProvider(): array
+    {
+        return [
+            'red' => ['red'],
+            'green' => ['green'],
+            'null' => [null],
+        ];
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    public function testNullWithoutImplicitNullThrowsAnException(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+
+        $className = $this->generateClassFromFile('TypedEnumProperty.json', null, false, false);
+
+        new $className(['property' => null]);
+    }
+
+    /**
+     * @param $propertyValue
+     *
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('invalidEnumEntriesDataProvider')]
+    public function testInvalidItemThrowsAnException(string $propertyValue): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+
+        $className = $this->generateEnumClass('string', static::ENUM_STRING);
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function invalidEnumEntriesDataProvider(): array
+    {
+        return [
+            'yellow' => ['yellow'],
+            'empty string' => [''],
+            'number string' => ['123']
+        ];
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('invalidItemTypeDataProvider')]
+    public function testInvalidItemTypeThrowsAnException(mixed $propertyValue): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage(
+            'Invalid type for property. Requires string, got ' .
+                (is_object($propertyValue) ? $propertyValue::class : gettype($propertyValue)),
+        );
+
+        $className = $this->generateEnumClass('string', static::ENUM_STRING);
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function invalidItemTypeDataProvider(): array
+    {
+        return [
+            'int' => [0],
+            'float' => [0.92],
+            'bool' => [true],
+            'array' => [[]],
+            'object' => [new stdClass()]
+        ];
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    public function testNotProvidedValueForRequiredEnumThrowsAnException(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage("Missing required value for property");
+
+        $className = $this->generateEnumClass('string', static::ENUM_STRING, true);
+
+        new $className([]);
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    public function testNullProvidedForRequiredEnumThrowsAnException(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage("Invalid type for property. Requires string, got NULL");
+
+        $className = $this->generateEnumClass('string', static::ENUM_STRING, true);
+
+        new $className(['property' => null]);
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('implicitNullDataProvider')]
+    public function testNotProvidedEnumItemIsValidInOptionalUntypedEnum(bool $implicitNull): void
+    {
+        $className = $this->generateClassFromFile(
+            'UntypedEnumProperty.json',
+            (new GeneratorConfiguration())->setImmutable(false),
+            false,
+            $implicitNull,
+        );
+
+        $object = new $className([]);
+        $this->assertNull($object->getProperty());
+
+        $this->assertSame('string|int|null', $this->getPropertyTypeAnnotation($object, 'property'));
+
+        $this->assertSame('string|int|null', $this->getReturnTypeAnnotation($object, 'getProperty'));
+        $this->assertEqualsCanonicalizing(
+            ['string', 'int', 'null'],
+            $this->getReturnTypeNames($object, 'getProperty'),
+        );
+
+        $this->assertSame(
+            $implicitNull ? 'string|int|null' : 'string|int',
+            $this->getParameterTypeAnnotation($object, 'setProperty'),
+        );
+        $this->assertEqualsCanonicalizing(
+            $implicitNull ? ['string', 'int', 'null'] : ['string', 'int'],
+            $this->getParameterTypeNames($object, 'setProperty'),
+        );
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('validEnumEntriesUntypedEnumDataProvider')]
+    public function testEnumItemIsValidInUntypedEnum(string|int|null $propertyValue): void
+    {
+        $className = $this->generateClassFromFile('UntypedEnumProperty.json');
+
+        $object = new $className(['property' => $propertyValue]);
+        $this->assertSame($propertyValue, $object->getProperty());
+    }
+
+    public static function validEnumEntriesUntypedEnumDataProvider(): array
+    {
+        return [
+            "string 'red'" => ['red'],
+            'null' => [null],
+            'int 0' => [0],
+            'int 10' => [10],
+        ];
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    public function testSuccessCreateObjectWithOptionalFieldsContainingZero(): void
+    {
+        $className = $this->generateClassFromFile('TypedEnumPropertyWithZeroValue.json', null, false, true);
+        $object = new $className(['property' => 10]);
+
+        $this->assertSame(10, $object->getProperty());
+        $this->assertNull($object->getPropertyWithZero());
+
+        $returnType = $this->getReturnType($object, 'getPropertyWithZero');
+        $this->assertSame('int', $returnType->getName());
+        $this->assertTrue($returnType->allowsNull());
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    public function testNullInUntypedEnumWithoutImplicitNullThrowsAnException(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+
+        $className = $this->generateClassFromFile('UntypedEnumProperty.json', null, false, false);
+
+        new $className(['property' => null]);
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('invalidEnumEntriesUntypedEnumDataProvider')]
+    public function testInvalidItemInUntypedEnumThrowsAnException(mixed $propertyValue): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+
+        $className = $this->generateClassFromFile('UntypedEnumProperty.json');
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    public static function invalidEnumEntriesUntypedEnumDataProvider(): array
+    {
+        return [
+            "string 'yellow'" => ['yellow'],
+            'int 8' => [8],
+            'float' => [0.92],
+            'bool' => [true],
+            'array' => [[]],
+            'object' => [new stdClass()],
+        ];
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('implicitNullDataProvider')]
+    public function testNotProvidedEnumItemInRequiredUntypedEnumThrowsAnException(bool $implicitNull): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Missing required value for property');
+
+        $className = $this->generateClassFromFile('RequiredUntypedEnumProperty.json', null, false, $implicitNull);
+
+        new $className([]);
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('implicitNullDataProvider')]
+    public function testProvidedEnumItemForRequiredUntypedEnumIsValid(bool $implicitNull): void
+    {
+        $className = $this->generateClassFromFile(
+            'RequiredUntypedEnumProperty.json',
+            (new GeneratorConfiguration())->setImmutable(false),
+            false,
+            $implicitNull,
+        );
+
+        $object = new $className(['property' => 'red']);
+        $this->assertSame('red', $object->getProperty());
+
+        $this->assertSame('string|int', $this->getPropertyTypeAnnotation($object, 'property'));
+
+        $this->assertSame('string|int', $this->getReturnTypeAnnotation($object, 'getProperty'));
+        $this->assertEqualsCanonicalizing(
+            ['string', 'int'],
+            $this->getReturnTypeNames($object, 'getProperty'),
+        );
+
+        $this->assertSame('string|int', $this->getParameterTypeAnnotation($object, 'setProperty'));
+        $this->assertEqualsCanonicalizing(
+            ['string', 'int'],
+            $this->getParameterTypeNames($object, 'setProperty'),
+        );
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('implicitNullDataProvider')]
+    public function testTypesAreInheritedFromEnumValuesForUntypedProperties(bool $implicitNull): void
+    {
+        $className = $this->generateClassFromFile(
+            'UntypedEnumPropertyTypeInheritance.json',
+            (new GeneratorConfiguration())->setImmutable(false),
+            false,
+            $implicitNull,
+        );
+
+        $object = new $className(['property' => 'red']);
+        $this->assertSame('red', $object->getProperty());
+
+        // property may be null if the optional property is not provided
+        $this->assertSame('string|null', $this->getPropertyTypeAnnotation($object, 'property'));
+
+        $this->assertSame('string|null', $this->getReturnTypeAnnotation($object, 'getProperty'));
+        $returnType = $this->getReturnType($object, 'getProperty');
+        $this->assertSame('string', $returnType->getName());
+        $this->assertTrue($returnType->allowsNull());
+
+        $this->assertSame(
+            $implicitNull ? 'string|null' : 'string',
+            $this->getParameterTypeAnnotation($object, 'setProperty'),
+        );
+        $parameterType = $this->getParameterType($object, 'setProperty');
+        $this->assertSame('string', $parameterType->getName());
+        $this->assertSame($implicitNull, $parameterType->allowsNull());
+    }
+
+    /**
+     * @throws FileSystemException
+     * @throws RenderException
+     * @throws SchemaException
+     */
+    #[DataProvider('implicitNullDataProvider')]
+    public function testNullProvidedEnumItemInRequiredUntypedEnumThrowsAnException(bool $implicitNull): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+
+        $className = $this->generateClassFromFile('RequiredUntypedEnumProperty.json', null, false, $implicitNull);
+
+        new $className(['property' => null]);
+    }
+
+    public function testEmptyEnumThrowsSchemaException(): void
+    {
+        $this->expectException(SchemaException::class);
+        $this->expectExceptionMessageMatches('/Empty enum property property in file .*\.json/');
+        $this->generateEnumClass('string', []);
+    }
+
+    public function testInvalidDefaultValueThrowsAnException(): void
+    {
+        $this->expectException(SchemaException::class);
+        $this->expectExceptionMessage("Invalid default value 11 for enum property property in file");
+
+        $this->generateClassFromFile('EnumPropertyInvalidDefaultValue.json');
+    }
+
+    protected function generateEnumClass(string $type, array $enumValues, $required = false): string
+    {
+        $enumValues = array_map(static fn($item): string => var_export($item, true), $enumValues);
+
+        return $this->generateClassFromFileTemplate(
+            'EnumProperty.json',
+            [
+                $type,
+                str_replace("'", '"', sprintf('[%s]', join(',', $enumValues))),
+                $required ? ',"required": ["property"]' : '',
+            ],
+            null,
+            false,
+        );
+    }
+}

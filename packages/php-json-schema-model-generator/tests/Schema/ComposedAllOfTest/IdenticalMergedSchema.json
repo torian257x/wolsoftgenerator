@@ -1,0 +1,47 @@
+{
+  "definitions": {
+    "basic": {
+      "type": "object",
+      "properties": {
+        "salary": {
+          "type": "integer"
+        }
+      }
+    },
+    "identification": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$id": "Company",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "CEO": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/basic"
+        },
+        {
+          "$ref": "#/definitions/identification"
+        }
+      ]
+    },
+    "CFO": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/basic"
+        },
+        {
+          "$ref": "#/definitions/identification"
+        }
+      ]
+    }
+  }
+}
