@@ -32,6 +32,11 @@ class RenderJob
         protected Schema $schema,
     ) {}
 
+    public function getSchema(): Schema
+    {
+        return $this->schema;
+    }
+
     /**
      * @param PostProcessor[] $postProcessors
      */

@@ -29,7 +29,9 @@
     ],
     "autoload-dev": {
         "psr-4": {
-            "PHPModelGenerator\\Tests\\": ["tests", "packages/php-json-schema-model-generator/tests"]
+            "PHPModelGenerator\\Tests\\": ["tests", "packages/php-json-schema-model-generator/tests"],
+            "AdCP\\MediaBuy\\": ["generated/adcp-media-buy"],
+            "AdCP\\MediaBuy\\Enums\\": ["generated/adcp-enums"]
         }
     }
 }
