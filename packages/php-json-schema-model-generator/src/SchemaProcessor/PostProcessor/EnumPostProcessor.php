@@ -404,7 +404,9 @@ class EnumPostProcessor extends PostProcessor
             // @codeCoverageIgnoreEnd
         }
 
-        require $filename;
+        if (!class_exists($fqcn) && !enum_exists($fqcn)) {
+            require $filename;
+        }
 
         if ($generatorConfiguration->isOutputEnabled()) {
             // @codeCoverageIgnoreStart
