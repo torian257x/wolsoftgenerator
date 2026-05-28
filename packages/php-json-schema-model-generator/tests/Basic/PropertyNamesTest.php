@@ -154,9 +154,9 @@ ERROR
                     <<<ERROR
 contains properties with invalid names.
   - invalid property 'test1'
-    * Invalid value for property name declined by const constraint
+    * Invalid value for property: 'property name' declined by const constraint, must be: type: string value: 'test'
   - invalid property 'bla'
-    * Invalid value for property name declined by const constraint
+    * Invalid value for property: 'property name' declined by const constraint, must be: type: string value: 'test'
 ERROR
                 ],
             ],

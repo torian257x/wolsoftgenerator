@@ -64,9 +64,7 @@ class PropertyProxy extends AbstractProperty
         ?PropertyType $outputType = null,
         bool $reset = false,
     ): PropertyInterface {
-        $this->getProperty()->setType($type, $outputType, $reset);
-
-        return $this;
+        return $this->getProperty()->setType($type, $outputType, $reset);
     }
 
     /**
@@ -174,9 +172,7 @@ class PropertyProxy extends AbstractProperty
      */
     public function filterDecorators(callable $filter): PropertyInterface
     {
-        $this->getProperty()->filterDecorators($filter);
-
-        return $this;
+        return $this->getProperty()->filterDecorators($filter);
     }
 
     /**
@@ -240,9 +236,7 @@ class PropertyProxy extends AbstractProperty
      */
     public function setWriteOnly(bool $isPropertyWriteOnly): PropertyInterface
     {
-        $this->getProperty()->setWriteOnly($isPropertyWriteOnly);
-
-        return $this;
+        return $this->getProperty()->setWriteOnly($isPropertyWriteOnly);
     }
 
     /**

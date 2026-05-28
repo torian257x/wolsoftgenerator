@@ -123,9 +123,9 @@ ERROR
 Invalid value for (.*?) declined by composition constraint\.
   Requires to match one composition element but matched 0 elements\.
   - Composition element #1: Failed
-    \* Value for integerProperty must not be smaller than 2
+    \* Value for integerProperty must not be smaller than 2(?: provided value: '.*?')?
   - Composition element #2: Failed
-    \* Value for integerProperty must not be smaller than 3
+    \* Value for integerProperty must not be smaller than 3(?: provided value: '.*?')?
 ERROR
             ],
             'nothing matches' => [
@@ -134,11 +134,11 @@ ERROR
 Invalid value for (.*?) declined by composition constraint\.
   Requires to match one composition element but matched 0 elements\.
   - Composition element #1: Failed
-    \* Value for integerProperty must not be smaller than 2
-    \* Value for integerProperty must be a multiple of 2
+    \* Value for integerProperty must not be smaller than 2(?: provided value: '.*?')?
+    \* Value for integerProperty must be a multiple of 2(?: provided value: '.*?')?
   - Composition element #2: Failed
-    \* Value for integerProperty must not be smaller than 3
-    \* Value for integerProperty must be a multiple of 3
+    \* Value for integerProperty must not be smaller than 3(?: provided value: '.*?')?
+    \* Value for integerProperty must be a multiple of 3(?: provided value: '.*?')?
 ERROR
             ],
             'invalid type' => [
@@ -147,9 +147,9 @@ ERROR
 Invalid value for (.*?) declined by composition constraint\.
   Requires to match one composition element but matched 0 elements\.
   - Composition element #1: Failed
-    \* Invalid type for integerProperty. Requires int, got string
+    \* Invalid type for integerProperty\. Requires int, got string(?: provided value: '.*?')?
   - Composition element #2: Failed
-    \* Invalid type for integerProperty. Requires int, got string
+    \* Invalid type for integerProperty\. Requires int, got string(?: provided value: '.*?')?
 ERROR
             ],
         ];

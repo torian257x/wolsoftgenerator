@@ -85,7 +85,7 @@ class EnumPostProcessorTest extends AbstractPHPModelGeneratorTestCase
         );
 
         $this->expectException(EnumException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
         $object->setProperty('Meier');
     }
 
@@ -95,7 +95,7 @@ class EnumPostProcessorTest extends AbstractPHPModelGeneratorTestCase
         $className = $this->generateClassFromFileTemplate('EnumProperty.json', ['["Hans", "Dieter"]'], null, false);
 
         $this->expectException(EnumException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
 
         new $className(['property' => 'Meier']);
     }
@@ -285,7 +285,7 @@ class EnumPostProcessorTest extends AbstractPHPModelGeneratorTestCase
         );
 
         $this->expectException(EnumException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
         $object->setProperty(1);
     }
 
@@ -349,7 +349,7 @@ class EnumPostProcessorTest extends AbstractPHPModelGeneratorTestCase
         $this->assertNull($enum::tryFrom('Dieter'));
 
         $this->expectException(EnumException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
         $object->setProperty(1);
     }
 
@@ -602,7 +602,7 @@ class EnumPostProcessorTest extends AbstractPHPModelGeneratorTestCase
 
         $builder->setProperty('Meier');
         $this->expectException(EnumException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
         $builder->validate();
     }
 

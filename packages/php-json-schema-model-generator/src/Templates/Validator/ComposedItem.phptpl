@@ -10,6 +10,9 @@
 ) {
     $succeededCompositionElements = {{ availableAmount }};
     $validatorComponentIndex = 0;
+    if(is_object($value)){ // it's assumed that object here means it was successfully created before, related to this https://github.com/wol-soft/php-json-schema-model-generator/issues/98
+        return;
+    }
     $originalModelData = $value;
     $proposedValue = null;
     $modifiedValues = [];
@@ -107,6 +110,7 @@
                     $this->_propertyValidationState[$validatorIndex][$validatorComponentIndex] = false;
                 }
             {% endif %}
+
 
             $succeededCompositionElements--;
         }

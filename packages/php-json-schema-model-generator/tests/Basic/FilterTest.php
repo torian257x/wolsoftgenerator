@@ -819,7 +819,7 @@ ERROR,);
         );
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for filteredProperty declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'filteredProperty' declined by enum constraint");
 
         new $className(['filteredProperty' => '1999-12-12']);
     }
