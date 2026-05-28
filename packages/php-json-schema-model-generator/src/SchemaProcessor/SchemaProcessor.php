@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PHPModelGenerator\SchemaProcessor;
 
+use PHPModelGenerator\Exception\FileSystemException;
 use PHPModelGenerator\Exception\SchemaException;
 use PHPModelGenerator\Model\GeneratorConfiguration;
 use PHPModelGenerator\Model\Property\CompositionPropertyDecorator;
@@ -195,6 +196,12 @@ class SchemaProcessor
      */
     public function generateClassFile(Schema $schema): void
     {
+        if (in_array($schema->getTargetFileName(), $this->generatedFiles, true)) {
+            throw new FileSystemException(
+                "File {$schema->getTargetFileName()} already exists. Make sure object IDs are unique.",
+            );
+        }
+
         $this->renderQueue->addRenderJob(new RenderJob($schema));
 
         if ($this->generatorConfiguration->isOutputEnabled()) {
