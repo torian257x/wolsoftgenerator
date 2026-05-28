@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PHPModelGenerator\Draft\Modifier;
 
+use PHPModelGenerator\Exception\Generic\InvalidConstDetailedException;
 use PHPModelGenerator\Exception\Generic\InvalidConstException;
 use PHPModelGenerator\Model\Property\PropertyInterface;
 use PHPModelGenerator\Model\Property\PropertyType;
@@ -45,7 +46,7 @@ class ConstModifier implements ModifierInterface
         $property->addValidator(new PropertyValidator(
             $property,
             $check,
-            InvalidConstException::class,
+            InvalidConstDetailedException::class,
             [$json['const']],
         ));
     }

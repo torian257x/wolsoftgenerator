@@ -20,11 +20,19 @@ class RenderQueue
     /** @var RenderJob[] */
     protected $jobs = [];
 
+    /** @var array<string, true> Tracks rendered filenames to skip duplicates */
+    protected array $renderedFiles = [];
+
     /**
      * @return $this
      */
     public function addRenderJob(RenderJob $renderJob): self
     {
+        $targetFile = $renderJob->getSchema()->getTargetFileName();
+        if (isset($this->renderedFiles[$targetFile])) {
+            return $this;
+        }
+        $this->renderedFiles[$targetFile] = true;
         $this->jobs[] = $renderJob;
 
         return $this;

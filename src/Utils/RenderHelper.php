@@ -120,6 +120,15 @@ class RenderHelper
         return ($nullable ? '?' : '') . $names[0];
     }
 
+    public function getSerializationAttribute(
+        PropertyInterface $property,
+    ): string {
+        if($property->isInternal()){
+            return '';
+        }
+        return sprintf(PHP_EOL . "#[\PHPModelGenerator\Attribute\JsonFieldName('%s')]", $property->getName());
+    }
+
     public function getTypeHintAnnotation(
         PropertyInterface $property,
         bool $outputType = false,

@@ -3,6 +3,7 @@
     "homepage": "https://github.com/wol-soft/php-json-schema-model-generator",
     "description": "Creates (immutable) PHP model classes from JSON-Schema files including all validation rules as PHP code",
     "type": "library",
+    "minimum-stability": "dev",
     "license": "MIT",
     "authors": [
         {

@@ -14,7 +14,7 @@ declare(strict_types = 1);
 {% endforeach %}
 
 /**
- * Builder class for {{ class }}
+ * Builder class for @see {{ class }}
  */
 class {{ class }}Builder implements BuilderInterface
 {

@@ -9,9 +9,10 @@ use PHPModelGenerator\Filter\TransformingFilterInterface;
 
 class EnumFilter implements TransformingFilterInterface
 {
+
     public function getToken(): string
     {
-        return 'php_model_generator_enum';
+        return self::FILTER_TOKEN_GENERATOR_ENUM;
     }
 
     public function getFilter(): array

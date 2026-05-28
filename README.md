@@ -6,7 +6,11 @@
 [![MIT License](https://img.shields.io/packagist/l/wol-soft/php-json-schema-model-generator.svg)](https://github.com/wol-soft/php-json-schema-model-generator/blob/master/LICENSE)
 [![Documentation Status](https://readthedocs.org/projects/php-json-schema-model-generator/badge/?version=latest)](https://php-json-schema-model-generator.readthedocs.io/en/latest/?badge=latest)
 
-# php-json-schema-model-generator
+# goTom devs:
+use master branch for deployment
+develop for development (as it uses locally linked github repositories)
+
+## php-json-schema-model-generator
 Generates PHP model classes from JSON-Schema files including validation and providing a fluent auto completion for the generated classes.
 
 ## Table of Contents ##
