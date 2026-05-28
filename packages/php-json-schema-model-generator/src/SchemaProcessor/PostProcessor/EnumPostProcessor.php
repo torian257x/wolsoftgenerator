@@ -297,6 +297,43 @@ class EnumPostProcessor extends PostProcessor
     }
 
     /**
+     * Check if a class/enum with the given FQCN is already loaded and has
+     * different case definitions than the provided $newCases. Returns true only
+     * if the existing enum's cases differ (meaning we have a naming conflict
+     * between two distinct enums).
+     *
+     * @param array<string, string> $newCases Case name => var_exported value
+     */
+    private function enumExistsWithDifferentCases(string $fqcn, array $newCases): bool
+    {
+        if (!class_exists($fqcn, false) && !enum_exists($fqcn, false)) {
+            return false;
+        }
+
+        $reflection = new \ReflectionEnum($fqcn);
+        $existingCases = $reflection->getCases();
+
+        if (count($existingCases) !== count($newCases)) {
+            return true;
+        }
+
+        foreach ($existingCases as $case) {
+            $caseName = $case->getName();
+            if (!isset($newCases[$caseName])) {
+                return true;
+            }
+            if ($reflection->isBacked()) {
+                $backingValue = $case->getBackingValue();
+                if ($newCases[$caseName] !== var_export($backingValue, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @throws SchemaException
      */
     private function validateEnum(PropertyInterface $property): bool
@@ -379,7 +416,10 @@ class EnumPostProcessor extends PostProcessor
         }
 
         // make sure different enums with an identical name don't overwrite each other
-        while (in_array("$this->namespace\\$name", array_column($this->generatedEnums, 'fqcn'))) {
+        while (
+            in_array("$this->namespace\\$name", array_column($this->generatedEnums, 'fqcn'))
+            || $this->enumExistsWithDifferentCases("$this->namespace\\$name", $cases)
+        ) {
             $name .= '_1';
         }
 
