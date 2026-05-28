@@ -163,7 +163,7 @@ class ConstPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testNotMatchingProvidedDataThrowsAnException(mixed $propertyValue): void
     {
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for stringProperty declined by const constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'stringProperty' declined by const constraint");
 
         $className = $this->generateClassFromFile('ConstProperty.json', null, false, false);
 
@@ -321,11 +321,11 @@ class ConstPropertyTest extends AbstractPHPModelGeneratorTestCase
         return self::combineDataProvider(
             self::implicitNullDataProvider(),
             [
-                ['blue', 'green', 'Invalid value for requiredProperty declined by const constraint'],
-                ['blue', null, 'Invalid value for requiredProperty declined by const constraint'],
-                ['red', 'blue', 'Invalid value for optionalProperty declined by const constraint'],
-                ['red', '0', 'Invalid value for optionalProperty declined by const constraint'],
-                ['red', '', 'Invalid value for optionalProperty declined by const constraint'],
+                ['blue', 'green', "Invalid value for property: 'requiredProperty' declined by const constraint"],
+                ['blue', null, "Invalid value for property: 'requiredProperty' declined by const constraint"],
+                ['red', 'blue', "Invalid value for property: 'optionalProperty' declined by const constraint"],
+                ['red', '0', "Invalid value for property: 'optionalProperty' declined by const constraint"],
+                ['red', '', "Invalid value for property: 'optionalProperty' declined by const constraint"],
             ],
         );
     }
@@ -375,7 +375,7 @@ class ConstPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testInvalidConstAdditionalPropertiesThrowsAnException(array $value): void
     {
         $this->expectException(InvalidAdditionalPropertiesException::class);
-        $this->expectExceptionMessageMatches('/Invalid value for additional property declined by const constraint/');
+        $this->expectExceptionMessageMatches("/Invalid value for property: '.*?' declined by const constraint/");
 
         $className = $this->generateClassFromFile('AdditionalPropertiesConst.json');
 
@@ -415,7 +415,7 @@ class ConstPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testInvalidConstPatternPropertiesThrowsAnException(array $value): void
     {
         $this->expectException(InvalidPatternPropertiesException::class);
-        $this->expectExceptionMessageMatches('/Invalid value for pattern property declined by const constraint/');
+        $this->expectExceptionMessageMatches("/Invalid value for property: '.*?' declined by const constraint/");
 
         $className = $this->generateClassFromFile('PatternPropertiesConst.json');
 

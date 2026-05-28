@@ -205,11 +205,11 @@ Invalid schema which is dependant on credit_card:
   - Invalid value for SchemaDependencyTest_\w+_credit_card_Dependency declined by composition constraint.
       Requires to match all composition elements but matched 0 elements.
       - Composition element #1: Failed
-        \* Missing required value for name
-        \* Invalid type for name. Requires string, got NULL
+        \* Missing required value for name(?: provided value: '.*?')?
+        \* Invalid type for name\. Requires string, got NULL(?: provided value: '.*?')?
       - Composition element #2: Failed
-        \* Missing required value for age
-        \* Invalid type for age. Requires int, got NULL
+        \* Missing required value for age(?: provided value: '.*?')?
+        \* Invalid type for age\. Requires int, got NULL(?: provided value: '.*?')?
 ERROR
             ],
             'required attribute not provided 2' => [
@@ -219,8 +219,8 @@ Invalid schema which is dependant on credit_card:
   - Invalid value for SchemaDependencyTest_\w+_credit_card_Dependency declined by composition constraint.
       Requires to match all composition elements but matched 1 elements.
       - Composition element #1: Failed
-        \* Missing required value for name
-        \* Invalid type for name. Requires string, got NULL
+        \* Missing required value for name(?: provided value: '.*?')?
+        \* Invalid type for name\. Requires string, got NULL(?: provided value: '.*?')?
       - Composition element #2: Valid
 ERROR
     ,
@@ -232,7 +232,7 @@ Invalid schema which is dependant on credit_card:
   - Invalid value for SchemaDependencyTest_\w+_credit_card_Dependency declined by composition constraint.
       Requires to match all composition elements but matched 1 elements.
       - Composition element #1: Failed
-        \* Invalid type for name. Requires string, got boolean
+        \* Invalid type for name\. Requires string, got boolean(?: provided value: '.*?')?
       - Composition element #2: Valid
 ERROR
     ,

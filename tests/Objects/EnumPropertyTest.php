@@ -70,7 +70,7 @@ class EnumPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testNullWithoutImplicitNullThrowsAnException(): void
     {
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
 
         $className = $this->generateClassFromFile('TypedEnumProperty.json', null, false, false);
 
@@ -88,7 +88,7 @@ class EnumPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testInvalidItemThrowsAnException(string $propertyValue): void
     {
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
 
         $className = $this->generateEnumClass('string', static::ENUM_STRING);
 
@@ -250,7 +250,7 @@ class EnumPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testNullInUntypedEnumWithoutImplicitNullThrowsAnException(): void
     {
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
 
         $className = $this->generateClassFromFile('UntypedEnumProperty.json', null, false, false);
 
@@ -266,7 +266,7 @@ class EnumPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testInvalidItemInUntypedEnumThrowsAnException(mixed $propertyValue): void
     {
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
 
         $className = $this->generateClassFromFile('UntypedEnumProperty.json');
 
@@ -378,7 +378,7 @@ class EnumPropertyTest extends AbstractPHPModelGeneratorTestCase
     public function testNullProvidedEnumItemInRequiredUntypedEnumThrowsAnException(bool $implicitNull): void
     {
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Invalid value for property declined by enum constraint');
+        $this->expectExceptionMessage("Invalid value for property: 'property' declined by enum constraint");
 
         $className = $this->generateClassFromFile('RequiredUntypedEnumProperty.json', null, false, $implicitNull);
 

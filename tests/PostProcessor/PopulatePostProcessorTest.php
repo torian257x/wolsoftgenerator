@@ -388,9 +388,9 @@ ERROR
 declined by composition constraint.
   Requires to match one composition element but matched 0 elements.
   - Composition element #1: Failed
-    * Invalid type for stringProperty. Requires string, got integer
+    * Invalid type for stringProperty. Requires string, got integer provided value: '99'
   - Composition element #2: Failed
-    * Invalid type for integerProperty. Requires int, got NULL
+    * Invalid type for integerProperty. Requires int, got NULL provided value: ''
 ERROR
             ],
             'Direct Exception' => [

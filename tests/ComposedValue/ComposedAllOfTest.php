@@ -514,14 +514,14 @@ declined by composition constraint.
   Requires to match all composition elements but matched 1 elements.
   - Composition element #1: Valid
   - Composition element #2: Failed
-    * Value for integerProperty must not be smaller than 1
+    * Value for integerProperty must not be smaller than 1 provided value: '-1'
 ERROR
                 ,
                 <<<ERROR
 declined by composition constraint.
   Requires to match all composition elements but matched 1 elements.
   - Composition element #1: Failed
-    * Value for stringProperty must not be shorter than 2
+    * Value for stringProperty must not be shorter than 2 provided value: ''
   - Composition element #2: Valid
 ERROR
             ],

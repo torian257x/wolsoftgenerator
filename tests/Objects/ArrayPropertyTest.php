@@ -714,8 +714,21 @@ ERROR
      * @throws SchemaException
      */
     #[DataProvider('invalidObjectArrayDataProvider')]
-    #[DataProvider('invalidCombinedObjectArrayDataProvider')]
     public function testInvalidObjectArrayThrowsAnException(
+        string $file,
+        GeneratorConfiguration $configuration,
+        array $propertyValue,
+        string $message,
+    ): void {
+        $this->expectValidationError($configuration, $message);
+
+        $className = $this->generateClassFromFile($file, $configuration);
+
+        new $className(['property' => $propertyValue]);
+    }
+
+    #[DataProvider('invalidCombinedObjectArrayDataProvider')]
+    public function testInvalidCombinedObjectArrayThrowsAnException(
         string $file,
         GeneratorConfiguration $configuration,
         array $propertyValue,
@@ -806,9 +819,9 @@ Invalid items in array property:
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 0 elements.
       - Composition element #1: Failed
-        * Invalid type for item of array property. Requires object, got boolean
+        * Invalid type for item of array property. Requires object, got boolean provided value: '1'
       - Composition element #2: Failed
-        * Invalid type for item of array property. Requires object, got boolean
+        * Invalid type for item of array property. Requires object, got boolean provided value: '1'
 ERROR
                     ],
                     'missing property name' => [
@@ -819,8 +832,8 @@ Invalid items in array property:
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 1 elements.
       - Composition element #1: Failed
-        * Missing required value for name
-        * Invalid type for name. Requires string, got NULL
+        * Missing required value for name provided value: ''
+        * Invalid type for name. Requires string, got NULL provided value: ''
       - Composition element #2: Valid
 ERROR
                     ],
@@ -832,7 +845,7 @@ Invalid items in array property:
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 1 elements.
       - Composition element #1: Failed
-        * Invalid type for name. Requires string, got boolean
+        * Invalid type for name. Requires string, got boolean provided value: ''
       - Composition element #2: Valid
 ERROR
                     ],
@@ -844,28 +857,28 @@ Invalid items in array property:
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 1 elements.
       - Composition element #1: Failed
-        * Invalid type for name. Requires string, got boolean
+        * Invalid type for name. Requires string, got boolean provided value: ''
       - Composition element #2: Valid
   - invalid item #1
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 0 elements.
       - Composition element #1: Failed
-        * Value for name must not be shorter than 2
+        * Value for name must not be shorter than 2 provided value: 'F'
       - Composition element #2: Failed
-        * Invalid type for age. Requires int, got string
+        * Invalid type for age. Requires int, got string provided value: 'yes'
   - invalid item #2
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 0 elements.
       - Composition element #1: Failed
-        * Invalid type for item of array property. Requires object, got integer
+        * Invalid type for item of array property. Requires object, got integer provided value: '5'
       - Composition element #2: Failed
-        * Invalid type for item of array property. Requires object, got integer
+        * Invalid type for item of array property. Requires object, got integer provided value: '5'
   - invalid item #3
     * Invalid value for item of array property declined by composition constraint.
       Requires to match all composition elements but matched 1 elements.
       - Composition element #1: Failed
-        * Missing required value for name
-        * Invalid type for name. Requires string, got NULL
+        * Missing required value for name provided value: ''
+        * Invalid type for name. Requires string, got NULL provided value: ''
       - Composition element #2: Valid
 ERROR
                     ],
