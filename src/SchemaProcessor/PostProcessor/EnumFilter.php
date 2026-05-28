@@ -12,7 +12,7 @@ class EnumFilter implements TransformingFilterInterface
 
     public function getToken(): string
     {
-        return self::FILTER_TOKEN_GENERATOR_ENUM;
+        return 'php_model_generator_enum';
     }
 
     public function getFilter(): array
