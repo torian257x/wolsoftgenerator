@@ -252,6 +252,12 @@ class PropertyFactory
 
         $configuration = $schemaProcessor->getGeneratorConfiguration();
 
+        // Strip the auto-generated "item of array <parent>" prefix from the SchemaName
+        // so it reflects the actual element type, not the synthetic array-item descriptor.
+        $schemaName = str_starts_with($propertyName, 'item of array ')
+            ? substr($propertyName, strlen('item of array '))
+            : $propertyName;
+
         $property
             ->addAttribute(
                 new PhpAttribute(JsonPointer::class, [$propertySchema->getPointer()]),
@@ -259,7 +265,7 @@ class PropertyFactory
                 PhpAttribute::JSON_POINTER,
             )
             ->addAttribute(
-                new PhpAttribute(SchemaName::class, [$propertyName]),
+                new PhpAttribute(SchemaName::class, [$schemaName]),
                 $configuration,
                 PhpAttribute::SCHEMA_NAME,
             )
