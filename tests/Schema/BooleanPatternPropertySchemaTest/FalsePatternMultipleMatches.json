@@ -1,6 +1,0 @@
-{
-  "type": "object",
-  "patternProperties": {
-    "^secret_.*": false
-  }
-}

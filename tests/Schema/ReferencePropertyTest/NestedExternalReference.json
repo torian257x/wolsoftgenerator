@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "$id": "%s",
-  "properties": {
-    "family": {
-      "$ref": "%s#/definitions/family"
-    }
-  }
-}

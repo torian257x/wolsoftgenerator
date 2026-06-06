@@ -1,9 +1,0 @@
-{
-    "title": "SingleFileProviderAddress",
-    "type": "object",
-    "properties": {
-        "city": {
-            "type": "string"
-        }
-    }
-}

@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "patternProperties": {
-    "^a": {
-      "type": "string"
-    }
-  },
-  "additionalProperties": false
-}

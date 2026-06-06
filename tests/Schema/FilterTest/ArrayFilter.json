@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "list": {
-      "type": "array",
-      "filter": "notEmpty"
-    }
-  }
-}

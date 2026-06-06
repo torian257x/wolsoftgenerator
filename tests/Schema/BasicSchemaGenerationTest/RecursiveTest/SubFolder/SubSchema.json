@@ -1,9 +1,0 @@
-{
-  "type": "object",
-  "$id": "SubClass",
-  "properties": {
-    "property": {
-      "type": "integer"
-    }
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "type": "object",
-  "properties": {
-    "address": {
-      "$ref": "./Dependencies/Address.json"
-    }
-  }
-}
