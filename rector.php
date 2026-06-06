@@ -18,8 +18,8 @@ return RectorConfig::configure()
     ->withBootstrapFiles([__DIR__ . '/tests/bootstrap.php'])
     ->withAutoloadPaths([__DIR__ . '/vendor/autoload.php'])
     ->withPaths([
-        __DIR__ . '/src',
-        __DIR__ . '/tests',
+        __DIR__ . '/packages/php-json-schema-model-generator/src',
+        __DIR__ . '/packages/php-json-schema-model-generator/tests',
     ])
     ->withPhpSets()
     ->withPreparedSets(

@@ -40,11 +40,7 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "PHPModelGenerator\\Tests\\": "packages/php-json-schema-model-generator/tests",
-            "ManualSchema\\": "packages/php-json-schema-model-generator/tests/manual/result"
+            "PHPModelGenerator\\Tests\\": "packages/php-json-schema-model-generator/tests"
         }
-    },
-    "config": {
-        "allow-plugins": false
     }
 }

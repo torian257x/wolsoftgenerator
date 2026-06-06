@@ -2,7 +2,7 @@
 <ruleset name="php-json-schema-model-generator">
     <description>PSR-12 based coding standard</description>
 
-    <file>src</file>
+    <file>packages/php-json-schema-model-generator/src</file>
 
     <rule ref="PSR12">
         <!-- Keep ) {} on one line for compact empty bodies -->
