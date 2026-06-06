@@ -97,7 +97,7 @@ git push origin fix/my-fix
 | Production library | `packages/php-json-schema-model-generator-production/src/` |
 | Test files | `packages/php-json-schema-model-generator/tests/` |
 | Test schema files | `packages/php-json-schema-model-generator/tests/Schema/` |
-| Test bootstrap | `packages/php-json-schema-model-generator/tests/bootstrap.php` |
+| Test bootstrap | `tests/bootstrap.php` (root level — vendor is at root, not inside the submodule) |
 
 ## Architecture
 
