@@ -1,0 +1,8 @@
+[submodule "packages/php-json-schema-model-generator"]
+	path = packages/php-json-schema-model-generator
+	url = git@github.com:torian257x/php-json-schema-model-generator.git
+	branch = v3ready-ai-fixed
+[submodule "packages/php-json-schema-model-generator-production"]
+	path = packages/php-json-schema-model-generator-production
+	url = git@github.com:torian257x/php-json-schema-model-generator-production.git
+	branch = v3ready

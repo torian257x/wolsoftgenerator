@@ -1,26 +1,33 @@
 {
-    "name": "wol-soft/php-json-schema-model-generator",
-    "homepage": "https://github.com/wol-soft/php-json-schema-model-generator",
-    "description": "Creates (immutable) PHP model classes from JSON-Schema files including all validation rules as PHP code",
-    "type": "library",
+    "name": "torian257x/wolsoftgenerator",
+    "homepage": "https://github.com/torian257x/wolsoftgenerator",
+    "description": "Test harness for php-json-schema-model-generator — runs extensive complex-schema tests and creates upstream PRs",
+    "type": "project",
     "minimum-stability": "dev",
     "license": "MIT",
     "authors": [
         {
-            "name": "Enno Woortmann",
-            "email": "enno.woortmann@web.de"
+            "name": "torian257x"
         }
     ],
     "repositories": [
         {
             "type": "path",
-            "url": "../php-json-schema-model-generator-production",
+            "url": "packages/php-json-schema-model-generator",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "packages/php-json-schema-model-generator-production",
             "options": {
                 "symlink": true
             }
         }
     ],
     "require": {
+        "wol-soft/php-json-schema-model-generator": "dev-v3ready-ai-fixed",
         "wol-soft/php-json-schema-model-generator-production": "dev-v3ready",
         "wol-soft/php-micro-template": "^1.10.2",
         "php": "^8.3",
@@ -31,15 +38,13 @@
         "rector/rector": "^1.2",
         "squizlabs/php_codesniffer": "^4.0"
     },
-    "autoload": {
-        "psr-4": {
-            "PHPModelGenerator\\": "src"
-        }
-    },
     "autoload-dev": {
         "psr-4": {
-            "PHPModelGenerator\\Tests\\": "tests",
-            "ManualSchema\\": "tests/manual/result"
+            "PHPModelGenerator\\Tests\\": "packages/php-json-schema-model-generator/tests",
+            "ManualSchema\\": "packages/php-json-schema-model-generator/tests/manual/result"
         }
+    },
+    "config": {
+        "allow-plugins": false
     }
 }
