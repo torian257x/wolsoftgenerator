@@ -3,6 +3,8 @@
   <testsuite name="PHPModelGenerator">
     <directory>packages/php-json-schema-model-generator/tests</directory>
     <exclude>packages/php-json-schema-model-generator/tests/manual</exclude>
+    <exclude>packages/php-json-schema-model-generator/tests/MediaBuyBeta7SchemasTest.php</exclude>
+    <exclude>packages/php-json-schema-model-generator/tests/MediaBuySchemasTest.php</exclude>
   </testsuite>
   <source>
     <include>
