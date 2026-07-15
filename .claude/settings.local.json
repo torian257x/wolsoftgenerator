@@ -36,7 +36,13 @@
       "WebFetch(domain:datatracker.ietf.org)",
       "Bash(for f:*)",
       "Bash(do)",
-      "Bash(done)"
-    ]
+      "Bash(done)",
+      "Skill(update-config)",
+      "Bash(git check-ignore *)",
+      "Bash(echo \"check-ignore exit: $?\")",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
+    ],
+    "defaultMode": "bypassPermissions"
   }
 }
